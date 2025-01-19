@@ -1,9 +1,22 @@
+--------------------------------------------------------------------------
+--  flyPlateBuffs for WoW 3.3.5 or Classic - Two-Container Rewritten
+--  This version splits the icons into buff vs. debuff frames, so buffs
+--  do not move when new debuffs appear.
+--------------------------------------------------------------------------
+
 local AddonName, fPB = ...
-L = fPB.L
+local L = fPB.L
 
-local	C_NamePlate_GetNamePlateForUnit, C_NamePlate_GetNamePlates, CreateFrame, UnitDebuff, UnitBuff, UnitName, UnitIsUnit, UnitIsPlayer, UnitPlayerControlled, UnitIsEnemy, UnitIsFriend, GetSpellInfo, table_sort, strmatch, format, wipe, pairs, GetTime, math_floor =
-		C_NamePlate.GetNamePlateForUnit, C_NamePlate.GetNamePlates, CreateFrame, UnitDebuff, UnitBuff, UnitName, UnitIsUnit, UnitIsPlayer, UnitPlayerControlled, UnitIsEnemy, UnitIsFriend, GetSpellInfo, table.sort, strmatch, format, wipe, pairs, GetTime, math.floor
+--------------------------------------------------------------------------
+--  Local references
+--------------------------------------------------------------------------
+local C_NamePlate_GetNamePlateForUnit, C_NamePlate_GetNamePlates = C_NamePlate.GetNamePlateForUnit, C_NamePlate.GetNamePlates
+local CreateFrame, UnitDebuff, UnitBuff, UnitName, UnitIsUnit = CreateFrame, UnitDebuff, UnitBuff, UnitName, UnitIsUnit
+local UnitIsPlayer, UnitPlayerControlled, UnitIsEnemy, UnitIsFriend = UnitIsPlayer, UnitPlayerControlled, UnitIsEnemy, UnitIsFriend
+local GetSpellInfo, table_sort, strmatch, format, wipe, pairs, GetTime = GetSpellInfo, table.sort, strmatch, format, wipe, pairs, GetTime
+local math_floor = math.floor
 
+-- references to your default table arrays
 local defaultSpells1, defaultSpells2 = fPB.defaultSpells1, fPB.defaultSpells2
 
 local LSM = LibStub("LibSharedMedia-3.0")
@@ -25,22 +38,27 @@ fPB.linkColor = "|cff71d5ff"
 local chatColor = fPB.chatColor
 local linkColor = fPB.linkColor
 
+--------------------------------------------------------------------------
+--  Data structures
+--------------------------------------------------------------------------
 local cachedSpells = {}
 local PlatesBuffs = {}
 
+--------------------------------------------------------------------------
+--  DefaultSettings
+--------------------------------------------------------------------------
 local DefaultSettings = {
 	profile = {
-		showDebuffs = 2,		-- 1 = all, 2 = mine + spellList, 3 = only spellList, 4 = only mine, 5 = none
-		showBuffs = 3,			-- 1 = all, 2 = mine + spellList, 3 = only spellList, 4 = only mine, 5 = none
+		showDebuffs = 2,
+		showBuffs   = 3,
 		hidePermanent = true,
 		notHideOnPersonalResource = true,
 
 		showOnPlayers = true,
-		showOnPets = true,
-		showOnNPC = true,
-
-		showOnEnemy = true,
-		showOnFriend = true,
+		showOnPets    = true,
+		showOnNPC     = true,
+		showOnEnemy   = true,
+		showOnFriend  = true,
 		showOnNeutral = true,
 
 		showOnlyInCombat = false,
@@ -48,361 +66,421 @@ local DefaultSettings = {
 
 		parentWorldFrame = false,
 
-		baseWidth = 24,
+		baseWidth  = 24,
 		baseHeight = 24,
-		myScale = 0.2,
-		cropTexture = true,
+		myScale    = 0.2,
+		cropTexture= true,
 
-		buffAnchorPoint = "BOTTOM",
-		plateAnchorPoint = "TOP",
+		-- Buff Position
+		buffAnchorPoint      = "BOTTOM",
+		plateAnchorPointBuff = "TOP",
+		xOffsetBuff          = -63,
+		yOffsetBuff          = 45,
 
-		xInterval = 4,
-		yInterval = 12,
+		-- Debuff Position
+		debuffAnchorPoint      = "TOP",
+		plateAnchorPointDebuff = "BOTTOM",
+		xOffsetDebuff          = -61,
+		yOffsetDebuff          = 73,
 
-		xOffset = 0,
-		yOffset = 4,
-
-		buffPerLine = 6,
-		numLines = 3,
+		xInterval = 3,
+		yInterval = 6,
+		
+		buffPerLine = 5,
+		numLines    = 3,
 
 		showStdCooldown = true,
-		showStdSwipe = false,
+		showStdSwipe    = false,
 
-		showDuration = true,
-		showDecimals = true,
-		durationPosition = 1, -- 1 - under, 2 - on icon, 3 - above icon
-		font = "Friz Quadrata TT", --durationFont
-		durationSize = 10,
+		showDuration    = true,
+		showDecimals    = true,
+		durationPosition= 1,
+		font            = "Friz Quadrata TT",
+		durationSize    = 10,
 		colorTransition = true,
-		colorSingle = {1.0,1.0,1.0},
+		colorSingle     = {1,1,1},
 
-		stackPosition = 1,  -- 1 - on icon, 2 - under, 3 - above icon
-		stackFont = "Friz Quadrata TT",
-		stackSize = 10,
-		stackColor = {1.0,1.0,1.0},
+		stackPosition   = 1,
+		stackFont       = "Friz Quadrata TT",
+		stackSize       = 10,
+		stackColor      = {1,1,1},
 
-		blinkTimeleft = 0.2,
+		blinkTimeleft   = 0.2,
 
-		borderStyle = 1,	-- 1 = \\texture\\border.tga, 2 = Blizzard, 3 = none
-		colorizeBorder = true,
+		borderStyle     = 1,
+		colorizeBorder  = true,
 		colorTypes = {
-			Magic 	= {0.20,0.60,1.00},
-			Curse 	= {0.60,0.00,1.00},
+			Magic   = {0.20,0.60,1.00},
+			Curse   = {0.60,0.00,1.00},
 			Disease = {0.60,0.40,0},
-			Poison 	= {0.00,0.60,0},
-			none 	= {0.80,0,   0},
-			Buff 	= {0.00,1.00,0},
+			Poison  = {0.00,0.60,0},
+			none    = {0.80,0,0},
+			Buff    = {0.00,1.00,0},
 		},
 
 		disableSort = false,
 		sortMode = {
-			"my", -- [1]
-			"expiration", -- [2]
-			"disable", -- [3]
-			"disable", -- [4]
+			"my","expiration","disable","disable"
 		},
 
 		Spells = {},
 		ignoredDefaultSpells = {},
-
 		showSpellID = false,
 	},
 }
 
-do --add default spells
-for i=1, #defaultSpells1 do
-	local spellID = defaultSpells1[i]
-	local name = GetSpellInfo(spellID)
-	if name then
-		DefaultSettings.profile.Spells[spellID] = {
-			name = name,
-			spellID = spellID,
-			scale = 1,
-			durationSize = 30, --seems like the player cant change this value ingame (the setting has no effect), so setting it here
-			show = 1,	-- 1 = always, 2 = mine, 3 = never, 4 = on ally, 5 = on enemy
-			stackSize = 18,
-		}
+-- Add default spells from defaultSpells1, defaultSpells2 ...
+do
+	--  as your code
+	for i=1, #defaultSpells1 do
+		local sid = defaultSpells1[i]
+		local sName = GetSpellInfo(sid)
+		if sName then
+			DefaultSettings.profile.Spells[sid] = {
+				name         = sName,
+				spellID      = sid,
+				scale        = 1,
+				durationSize = 20,
+				show         = 1,
+				stackSize    = 16,
+			}
+		end
+	end
+	for i=1, #defaultSpells2 do
+		local sid = defaultSpells2[i]
+		local sName = GetSpellInfo(sid)
+		if sName then
+			DefaultSettings.profile.Spells[sid] = {
+				name         = sName,
+				spellID      = sid,
+				scale        = 1,
+				durationSize = 14,
+				show         = 1,
+				stackSize    = 14,
+			}
+		end
 	end
 end
 
-for i=1, #defaultSpells2 do
-	local spellID = defaultSpells2[i]
-	local name = GetSpellInfo(spellID)
-	if name then
-		DefaultSettings.profile.Spells[spellID] = {
-			name = name,
-			spellID = spellID,
-			scale = 1,
-			durationSize = 14,
-			show = 1,	-- 1 = always, 2 = mine, 3 = never, 4 = on ally, 5 = on enemy
-			stackSize = 14,
-		}
-	end
-end
-
-end
-
---timeIntervals
-local minute, hour, day = 60, 3600, 86400
-local aboutMinute, aboutHour, aboutDay = 59.5, 60 * 59.5, 3600 * 23.5
-
-local function round(x) return floor(x + 0.5) end
+--------------------------------------------------------------------------
+--  Helpers
+--------------------------------------------------------------------------
+local function round(x) return math_floor(x + 0.5) end
 
 local function FormatTime(seconds)
-	if seconds < 1 and db.showDecimals then --this used to be 10 seconds(it still shows as "10" in the ingame options but im too lazy to edit it there so cba...
+	--  code as your existing FormatTime
+	if db.showDecimals and seconds < 5 then
 		return "%.1f", seconds
-	elseif seconds < aboutMinute then
-		local seconds = round(seconds)
-		return seconds ~= 0 and seconds or ""
-	elseif seconds < aboutHour then
-		return "%dm", round(seconds/minute)
-	elseif seconds < aboutDay then
-		return "%dh", round(seconds/hour)
+	end
+	local minute, hour, day = 60, 3600, 86400
+	if seconds < 59.5 then
+		local s = round(seconds)
+		return s ~= 0 and s or ""
+	elseif seconds < 3600*23.5 then
+		if seconds < 3600 then
+			return "%dm", round(seconds/60)
+		else
+			return "%dh", round(seconds/3600)
+		end
 	else
-		return "%dd", round(seconds/day)
+		return "%dd", round(seconds/86400)
 	end
 end
 
---custom reworked this shit to suit my needs, if you want the default green-->yellow-->red behavior, well... tough luck, get fucked
 local function GetColorByTime(current, max)
-    if max == 0 then max = 1 end
-    local timeLeft = current
-    local red, green, blue = 1, 1, 1  -- start as white all the way down
-
-    if timeLeft <= 1 then
-        -- change the color smoothly at the very end into red
-        red = 1
-        green = timeLeft
-        blue = timeLeft
-    end
-
-    return red, green, blue
+	--  code as your existing function
+	if max==0 then max=1 end
+	local timeLeft = current
+	local r,g,b = 1,1,1
+	if timeLeft < 10 then
+		if timeLeft < 5 then
+			if timeLeft < 1 then
+				r,g,b = 1,0,0
+			else
+				local t = (timeLeft -1)/4
+				r=1; g=t; b=0
+			end
+		else
+			local t = (10-timeLeft)/5
+			r= t; g=1; b=0
+		end
+	end
+	return r,g,b
 end
 
-
+--------------------------------------------------------------------------
+--  Sorting
+--------------------------------------------------------------------------
 local function SortFunc(a,b)
-	local i = 1
+	--  code as your existing SortFunc
+	local i=1
 	while db.sortMode[i] do
-		local mode, rev = db.sortMode[i],db.sortMode[i+0.5]
-		if mode ~= "disable" and a[mode] ~= b[mode] then
-			if mode == "my" and not rev then -- self first
+		local mode, rev = db.sortMode[i], db.sortMode[i+0.5]
+		if mode~="disable" and a[mode]~=b[mode] then
+			if mode=="my" and not rev then
 				return (a.my and 1 or 0) > (b.my and 1 or 0)
-			elseif mode == "my" and rev then
+			elseif mode=="my" and rev then
 				return (a.my and 1 or 0) < (b.my and 1 or 0)
-			elseif mode == "expiration" and not rev then
-				return (a.expiration > 0 and a.expiration or 5000000) < (b.expiration > 0 and b.expiration or 5000000)
-			elseif mode == "expiration" and rev then
-				return (a.expiration > 0 and a.expiration or 5000000) > (b.expiration > 0 and b.expiration or 5000000)
-			elseif (mode == "type" or mode == "scale") and not rev then
-				return a[mode] > b[mode]
+			elseif mode=="expiration" and not rev then
+				local aExp= (a.expiration>0 and a.expiration or 999999)
+				local bExp= (b.expiration>0 and b.expiration or 999999)
+				return aExp < bExp
+			elseif mode=="expiration" and rev then
+				local aExp= (a.expiration>0 and a.expiration or 999999)
+				local bExp= (b.expiration>0 and b.expiration or 999999)
+				return aExp > bExp
+			elseif (mode=="type" or mode=="scale") and not rev then
+				return a[mode]>b[mode]
 			else
-				return a[mode] < b[mode]
+				return a[mode]<b[mode]
 			end
 		end
-		i = i+1
+		i=i+1
 	end
 end
 
-local function DrawOnPlate(frame)
-
-	if not (#frame.fPBiconsFrame.iconsFrame > 0) then return end
-
+--------------------------------------------------------------------------
+--  The container-based layout function
+--------------------------------------------------------------------------
+-- We'll place all icons in lines, just like you do in DrawOnPlate or LayoutIcons.
+-- But it will ONLY be for the container passed in (Buffs or Debuffs).
+local function LayoutIcons(containerFrame, icons, isBuff)
 	local maxWidth = 0
-	local sumHeight = 0
+	local sumHeight=0
 
-	local buffIcon = frame.fPBiconsFrame.iconsFrame
+	local count = #icons
+	local index = 1
 
-	local breaked = false
-	for l = 1, db.numLines do
-		if breaked then break end
-
-		local lineWidth = 0
-		local lineHeight = 0
-
-		for k = 1, db.buffPerLine do
-
-			local i = db.buffPerLine*(l-1)+k
-			if not buffIcon[i] or not buffIcon[i]:IsShown() then breaked = true; break end
-			buffIcon[i]:ClearAllPoints()
-			if l == 1 and k == 1 then
-				buffIcon[i]:SetPoint("BOTTOMLEFT", frame.fPBiconsFrame, "BOTTOMLEFT", 0, 0)
-			elseif k == 1 then
-				buffIcon[i]:SetPoint("BOTTOMLEFT", buffIcon[i-db.buffPerLine], "TOPLEFT", 0, db.yInterval)
-			else
-				buffIcon[i]:SetPoint("BOTTOMLEFT", buffIcon[i-1], "BOTTOMRIGHT", db.xInterval, 0)
+	for l=1, db.numLines do
+		local lineWidth=0
+		local lineHeight=0
+		for k=1, db.buffPerLine do
+			local icon = icons[index]
+			if not icon or not icon:IsShown() then
+				break
 			end
-
-			lineWidth = lineWidth + buffIcon[i].width + db.xInterval
-			lineHeight = (buffIcon[i].height > lineHeight) and buffIcon[i].height or lineHeight
+			icon:ClearAllPoints()
+			if l==1 and k==1 then
+				-- first icon in first line
+				icon:SetPoint("TOPLEFT", containerFrame, "TOPLEFT", 0, 0)
+			elseif k==1 then
+				-- first icon in subsequent lines
+				local iconAbove = icons[index - db.buffPerLine]
+				if iconAbove then
+					icon:SetPoint("BOTTOMLEFT", iconAbove, "TOPLEFT", 0, db.yInterval)
+				end
+			else
+				local iconLeft = icons[index -1]
+				icon:SetPoint("BOTTOMLEFT", iconLeft, "BOTTOMRIGHT", db.xInterval, 0)
+			end
+			lineWidth = lineWidth + (icon.width or db.baseWidth) + db.xInterval
+			lineHeight= math.max(lineHeight, icon.height or db.baseHeight)
+			index=index+1
+			if index>count then
+				break
+			end
 		end
-		maxWidth = max(maxWidth, lineWidth)
+		maxWidth  = math.max(maxWidth, lineWidth)
 		sumHeight = sumHeight + lineHeight + db.yInterval
-	end
-	if #PlatesBuffs[frame] > db.numLines * db.buffPerLine then
-		for i = db.numLines * db.buffPerLine + 1, #PlatesBuffs[frame] do
-			buffIcon[i]:Hide()
+		if index>count then
+			break
 		end
 	end
-	frame.fPBiconsFrame:SetWidth(maxWidth-db.xInterval)
-	frame.fPBiconsFrame:SetHeight(sumHeight - db.yInterval)
-	frame.fPBiconsFrame:ClearAllPoints()
-	frame.fPBiconsFrame:SetPoint(db.buffAnchorPoint,frame,db.plateAnchorPoint,db.xOffset,db.yOffset)
-	if MSQ then
-		Group:ReSkin()
+	if sumHeight>0 then
+		sumHeight= sumHeight - db.yInterval
+	end
+	if maxWidth>0 then
+		maxWidth= maxWidth - db.xInterval
+	end
+	containerFrame:SetSize(maxWidth, sumHeight)
+end
+
+--------------------------------------------------------------------------
+--  Data: AddBuff, FilterBuffs, ScanUnitBuffs
+--------------------------------------------------------------------------
+local function AddBuff(frame, auraType, icon, stack, debufftype, duration, expiration, my, id, scale, durationSize, stackSize)
+	if not PlatesBuffs[frame] then
+		PlatesBuffs[frame] = { buffs={}, debuffs={} }
+	end
+	local buffData = {
+		type = auraType,
+		icon = icon,
+		stack= stack,
+		debufftype = debufftype,
+		duration= duration,
+		expiration= expiration,
+		scale= (my and db.myScale+1 or 1)*(scale or 1),
+		durationSize= durationSize,
+		stackSize= stackSize,
+		id= id,
+		my= my,
+	}
+
+	if auraType=="HELPFUL" then
+		table.insert(PlatesBuffs[frame].buffs, buffData)
+	elseif auraType=="HARMFUL" then
+		table.insert(PlatesBuffs[frame].debuffs, buffData)
 	end
 end
 
-local function AddBuff(frame, type, icon, stack, debufftype, duration, expiration, my, id, scale, durationSize, stackSize)
-	if not PlatesBuffs[frame] then PlatesBuffs[frame] = {} end
-	PlatesBuffs[frame][#PlatesBuffs[frame] + 1] = {
-		type = type,
-		icon = icon,
-		stack = stack,
-		debufftype = debufftype,
-		duration = duration,
-		expiration = expiration,
-		scale = (my and db.myScale + 1 or 1) * (scale or 1),
-		durationSize = durationSize,
-		stackSize = stackSize,
-		id = id,
-	}
-end
+local function FilterBuffs(isAlly, frame, auraType, name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
+	if auraType=="HARMFUL" and db.showDebuffs==5 then return end
+	if auraType=="HELPFUL" and db.showBuffs==5 then return end
 
-local function FilterBuffs(isAlly, frame, type, name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
-	if type == "HARMFUL" and db.showDebuffs == 5 then return end
-	if type == "HELPFUL" and db.showBuffs == 5 then return end
-
-	local Spells = db.Spells
+	local Spells= db.Spells
 	local listedSpell
-	local my = caster == "player"
-	local cachedID = cachedSpells[name]
+	local my= (caster=="player")
+	local cachedID= cachedSpells[name]
 
 	if Spells[spellID] and not db.ignoredDefaultSpells[spellID] then
-		listedSpell = Spells[spellID]
+		listedSpell= Spells[spellID]
 	elseif cachedID then
-		if cachedID == "noid" then
-			listedSpell = Spells[name]
+		if cachedID=="noid" then
+			listedSpell= Spells[name]
 		else
-			listedSpell = Spells[cachedID]
+			listedSpell= Spells[cachedID]
 		end
 	end
 
-	-- showDebuffs  1 = all, 2 = mine + spellList, 3 = only spellList, 4 = only mine, 5 = none
-	-- listedSpell.show  -- 1 = always, 2 = mine, 3 = never, 4 = on ally, 5 = on enemy
 	if not listedSpell then
-		if db.hidePermanent and duration == 0 then
+		if db.hidePermanent and duration==0 then
 			return
 		end
-		if (type == "HARMFUL" and (db.showDebuffs == 1 or ((db.showDebuffs == 2 or db.showDebuffs == 4) and my)))
-		or (type == "HELPFUL"   and (db.showBuffs   == 1 or ((db.showBuffs   == 2 or db.showBuffs   == 4) and my))) then
-			AddBuff(frame, type, icon, stack, debufftype, duration, expiration, my, id)
-			return
-		else
+		if (auraType=="HARMFUL" and (db.showDebuffs==1 or((db.showDebuffs==2 or db.showDebuffs==4)and my)))
+		or  (auraType=="HELPFUL" and (db.showBuffs==1 or((db.showBuffs==2 or db.showBuffs==4)and my))) then
+			AddBuff(frame, auraType, icon, stack, debufftype, duration, expiration, my, id)
+		end
+	else
+		if (auraType=="HARMFUL" and db.showDebuffs==4 and not my) 
+		or  (auraType=="HELPFUL" and db.showBuffs==4 and not my) then
 			return
 		end
-	else --listedSpell
-		if (type == "HARMFUL" and (db.showDebuffs == 4 and not my))
-		or (type == "HELPFUL" and (db.showBuffs == 4 and not my)) then
-			return
-		end
-		if(listedSpell.show == 1)
-		or(listedSpell.show == 2 and my)
-		or(listedSpell.show == 4 and isAlly)
-		or(listedSpell.show == 5 and not isAlly) then
-			AddBuff(frame, type, icon, stack, debufftype, duration, expiration, my, id, listedSpell.scale, listedSpell.durationSize, listedSpell.stackSize)
-			return
+		if (listedSpell.show==1) 
+		or  (listedSpell.show==2 and my)
+		or  (listedSpell.show==4 and isAlly)
+		or  (listedSpell.show==5 and not isAlly) then
+			AddBuff(frame, auraType, icon, stack, debufftype, duration, expiration, my, id, listedSpell.scale, listedSpell.durationSize, listedSpell.stackSize)
 		end
 	end
 end
 
 local function ScanUnitBuffs(nameplateID, frame)
-
 	if PlatesBuffs[frame] then
-		wipe(PlatesBuffs[frame])
-	end
-	local isAlly = UnitIsFriend(nameplateID,"player")
-	local id = 1
-	while UnitDebuff(nameplateID,id) do
-		local name, rank, icon, stack, debufftype, duration, expiration, caster, _, _, spellID = UnitDebuff(nameplateID, id)
-		FilterBuffs(isAlly, frame, "HARMFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
-		id = id + 1
+		wipe(PlatesBuffs[frame].buffs)
+		wipe(PlatesBuffs[frame].debuffs)
+	else
+		PlatesBuffs[frame] = { buffs={}, debuffs={} }
 	end
 
-	id = 1
-	while UnitBuff(nameplateID,id) do
-		local name, rank, icon, stack, debufftype, duration, expiration, caster, _, _, spellID = UnitBuff(nameplateID, id)
-		FilterBuffs(isAlly, frame, "HELPFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
-		id = id + 1
+	local isAlly= UnitIsFriend(nameplateID,"player")
+	local i=1
+	while true do
+		local name, _, icon, stack, debufftype, duration, expiration, caster, _,_, spellID = UnitDebuff(nameplateID, i)
+		if not name then break end
+		FilterBuffs(isAlly, frame, "HARMFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, i)
+		i=i+1
+	end
+
+	i=1
+	while true do
+		local name, _, icon, stack, debufftype, duration, expiration, caster, _,_, spellID = UnitBuff(nameplateID, i)
+		if not name then break end
+		FilterBuffs(isAlly, frame, "HELPFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, i)
+		i=i+1
 	end
 end
 
+--------------------------------------------------------------------------
+--  FilterUnits
+--------------------------------------------------------------------------
 local function FilterUnits(nameplateID)
-
-	if db.showOnlyInCombat and not UnitAffectingCombat("player") then return true end -- InCombatLockdown()
-	if db.showUnitInCombat and not UnitAffectingCombat(nameplateID) then return true end
-
-	-- filter units
-	if UnitIsUnit(nameplateID,"player") then return true end
-	if UnitIsPlayer(nameplateID) and not db.showOnPlayers then return true end
-	if UnitPlayerControlled(nameplateID) and not UnitIsPlayer(nameplateID) and not db.showOnPets then return true end
-	if not UnitPlayerControlled(nameplateID) and not UnitIsPlayer(nameplateID) and not db.showOnNPC then return true end
-	if UnitIsEnemy(nameplateID,"player") and not db.showOnEnemy then return true end
-	if UnitIsFriend(nameplateID,"player") and not db.showOnFriend then return true end
-	if not UnitIsFriend(nameplateID,"player") and not UnitIsEnemy(nameplateID,"player") and not db.showOnNeutral then return true end
-
+	if db.showOnlyInCombat and not UnitAffectingCombat("player") then
+		return true
+	end
+	if db.showUnitInCombat and not UnitAffectingCombat(nameplateID) then
+		return true
+	end
+	if UnitIsUnit(nameplateID,"player") then
+		return true
+	end
+	if UnitIsPlayer(nameplateID) and not db.showOnPlayers then
+		return true
+	end
+	if UnitPlayerControlled(nameplateID) and not UnitIsPlayer(nameplateID) and not db.showOnPets then
+		return true
+	end
+	if not UnitPlayerControlled(nameplateID) and not UnitIsPlayer(nameplateID) and not db.showOnNPC then
+		return true
+	end
+	if UnitIsEnemy(nameplateID,"player") and not db.showOnEnemy then
+		return true
+	end
+	if UnitIsFriend(nameplateID,"player") and not db.showOnFriend then
+		return true
+	end
+	if not UnitIsFriend(nameplateID,"player") and not UnitIsEnemy(nameplateID,"player") and not db.showOnNeutral then
+		return true
+	end
 	return false
 end
 
-local total = 0
+--------------------------------------------------------------------------
+--  Icon OnUpdate, etc.
+--------------------------------------------------------------------------
+local total=0
 local function iconOnUpdate(self, elapsed)
-	total = total + elapsed
-	if total > 0 then
-		total = 0
-		if self.expiration and self.expiration > 0 then
-			local timeLeft = self.expiration - GetTime()
-			if timeLeft < 0 then
-				-- local frame = self:GetParent():GetParent()
-				-- self:Hide()
-				-- UpdateUnitAuras(frame.namePlateUnitToken)
+	total= total+ elapsed
+	if total>0 then
+		total=0
+		if self.expiration and self.expiration>0 then
+			local timeLeft= self.expiration- GetTime()
+			if timeLeft<0 then
 				return
 			end
 			if db.showDuration then
-				self.durationtext:SetFormattedText(FormatTime(timeLeft))
+				local fmt, val = FormatTime(timeLeft)
+				self.durationtext:SetFormattedText(fmt, val)
 				if db.colorTransition then
-					self.durationtext:SetTextColor(GetColorByTime(timeLeft,self.duration))
+					local r,g,b= GetColorByTime(timeLeft, self.duration)
+					self.durationtext:SetTextColor(r,g,b,1)
 				end
-				if db.durationPosition == 1 or db.durationPosition == 3 then
+				if db.durationPosition==1 or db.durationPosition==3 then
 					self.durationBg:SetWidth(self.durationtext:GetStringWidth())
 					self.durationBg:SetHeight(self.durationtext:GetStringHeight())
 				end
 			end
-			if (timeLeft / (self.duration + 0.01) ) < db.blinkTimeleft and timeLeft < 60 then --buff only has 20% timeleft and is less then 60 seconds.
-				local f = GetTime() % 1
-				if f > 0.5 then
-					f = 1 - f
-				end
-				self:SetAlpha(math.min(math.max(f * 3, 0), 1))
+			if (timeLeft/(self.duration+0.01))<db.blinkTimeleft and timeLeft<60 then
+				local f= GetTime()%1
+				if f>0.5 then f=1-f end
+				self:SetAlpha(math.min(math.max(f*3,0),1))
 			end
 		end
 	end
 end
-local function GetTexCoordFromSize(frame,size,size2)
-	local arg = size/size2
-	local abj
-	if arg > 1 then
-		abj = 1/size*((size-size2)/2)
 
-		frame:SetTexCoord(0 ,1,(0+abj),(1-abj))
-	elseif arg < 1 then
-		abj = 1/size2*((size2-size)/2)
+local function iconOnHide(self)
+	self.stacktext:Hide()
+	self.border:Hide()
+	self.cooldown:Hide()
+	self.durationtext:Hide()
+	self.durationBg:Hide()
+	self.stackBg:Hide()
+end
 
-		frame:SetTexCoord((0+abj),(1-abj),0,1)
+local function GetTexCoordFromSize(frame, width, height)
+	local ratio= width/height
+	if ratio>1 then
+		local excess= (1-(height/width))/2
+		frame:SetTexCoord(0,1,excess,1-excess)
+	elseif ratio<1 then
+		local excess= (1-(width/height))/2
+		frame:SetTexCoord(excess,1-excess,0,1)
 	else
-		frame:SetTexCoord(0, 1, 0, 1)
+		frame:SetTexCoord(0,1,0,1)
 	end
 end
-local function UpdateBuffIcon(self)
 
+local function UpdateBuffIcon(self)
 	self:SetAlpha(1)
 	self.stacktext:Hide()
 	self.border:Hide()
@@ -416,28 +494,30 @@ local function UpdateBuffIcon(self)
 
 	self.texture:SetTexture(self.icon)
 	if db.cropTexture then
-		GetTexCoordFromSize(self.texture,self.width,self.height)
+		GetTexCoordFromSize(self.texture, self.width, self.height)
 	else
-		self.texture:SetTexCoord(0, 1, 0, 1)
+		self.texture:SetTexCoord(0,1,0,1)
 	end
 
-	if db.borderStyle ~= 3 then
+	if db.borderStyle~=3 then
 		local color
-		if self.type == "HELPFUL" then
-			color = db.colorTypes.Buff
+		if self.type=="HELPFUL" then
+			color= db.colorTypes.Buff
 		else
 			if db.colorizeBorder then
-				color = self.debufftype and db.colorTypes[self.debufftype] or db.colorTypes.none
+				color= self.debufftype and db.colorTypes[self.debufftype] or db.colorTypes.none
 			else
-				color = db.colorTypes.none
+				color= db.colorTypes.none
 			end
 		end
-		self.border:SetVertexColor(color[1], color[2], color[3])
-		self.border:Show()
+		if color then
+			self.border:SetVertexColor(color[1],color[2],color[3])
+			self.border:Show()
+		end
 	end
 
-	if db.showDuration and self.expiration > 0 then
-		if db.durationPosition == 1 or db.durationPosition == 3 then
+	if db.showDuration and self.expiration>0 then
+		if db.durationPosition==1 or db.durationPosition==3 then
 			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "NORMAL")
 			self.durationBg:Show()
 		else
@@ -445,9 +525,16 @@ local function UpdateBuffIcon(self)
 		end
 		self.durationtext:Show()
 	end
-	if self.stack > 1 then
+
+	if self.stack>1 then
+		if not self.stacktext:GetFont() then
+		-- Use your LSM-queried font or a fallback
+		self.stacktext:SetFont(fPB.stackFont or "Fonts\\FRIZQT__.TTF",
+                           (self.stackSize or db.stackSize),
+                           "OUTLINE")
+		end
 		self.stacktext:SetText(tostring(self.stack))
-		if db.stackPosition == 2 or db.stackPosition == 3 then
+		if db.stackPosition==2 or db.stackPosition==3 then
 			self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "NORMAL")
 			self.stackBg:SetWidth(self.stacktext:GetStringWidth())
 			self.stackBg:SetHeight(self.stacktext:GetStringHeight())
@@ -458,265 +545,326 @@ local function UpdateBuffIcon(self)
 		self.stacktext:Show()
 	end
 end
+
 local function UpdateBuffIconOptions(self)
 	self.texture:SetAllPoints(self)
-
 	self.border:SetAllPoints(self)
-	if db.borderStyle == 1 then
+
+	if db.borderStyle==1 then
 		self.border:SetTexture("Interface\\Addons\\flyPlateBuffs\\texture\\border.tga")
-		self.border:SetTexCoord(0.08,0.08, 0.08,0.92, 0.92,0.08, 0.92,0.92)		--хз почему отображает не на всю иконку по дефолту, цифры подбором
-	elseif db.borderStyle == 2 then
+		self.border:SetTexCoord(0.08,0.08, 0.08,0.92, 0.92,0.08, 0.92,0.92)
+	elseif db.borderStyle==2 then
 		self.border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
-		self.border:SetTexCoord(0.296875,0.5703125,0,0.515625)		-- if "Interface\\Buttons\\UI-Debuff-Overlays"
+		self.border:SetTexCoord(0.296875,0.5703125, 0,0.515625)
 	end
 
 	if db.showDuration then
 		self.durationtext:ClearAllPoints()
 		self.durationBg:ClearAllPoints()
-		if db.durationPosition == 1 then
-			-- under icon
-			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "NORMAL")
-			self.durationtext:SetPoint("TOP", self, "BOTTOM", 0, -1)
+		if db.durationPosition==1 then
+			self.durationtext:SetPoint("TOP", self, "BOTTOM",0,-1)
 			self.durationBg:SetPoint("CENTER", self.durationtext)
-		elseif db.durationPosition == 3 then
-			-- above icon
-			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "NORMAL")
-			self.durationtext:SetPoint("BOTTOM", self, "TOP", 0, 1)
+		elseif db.durationPosition==3 then
+			self.durationtext:SetPoint("BOTTOM", self, "TOP",0,1)
 			self.durationBg:SetPoint("CENTER", self.durationtext)
 		else
-			-- on icon
-			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "OUTLINE")
-			self.durationtext:SetPoint("CENTER", self, "CENTER", 0, 0)
-		end
-		if not colorTransition then
-			self.durationtext:SetTextColor(db.colorSingle[1],db.colorSingle[2],db.colorSingle[3],1)
+			self.durationtext:SetPoint("CENTER", self, "CENTER",0,0)
 		end
 	end
 
 	self.stacktext:ClearAllPoints()
 	self.stackBg:ClearAllPoints()
 	self.stacktext:SetTextColor(db.stackColor[1],db.stackColor[2],db.stackColor[3],1)
-	if db.stackPosition == 1 then
-		-- on icon
-		self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "OUTLINE")
-		self.stacktext:SetPoint("BOTTOMRIGHT", self, "BOTTOMRIGHT", -1, 3)
-	elseif db.stackPosition == 2 then
-		-- under icon
-		self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "NORMAL")
-		self.stacktext:SetPoint("TOP", self, "BOTTOM", 0, -1)
+	if db.stackPosition==1 then
+		self.stacktext:SetPoint("BOTTOMRIGHT", self,"BOTTOMRIGHT",-1,3)
+	elseif db.stackPosition==2 then
+		self.stacktext:SetPoint("TOP", self,"BOTTOM",0,-1)
 		self.stackBg:SetPoint("CENTER", self.stacktext)
 	else
-		-- above icon
-		self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "NORMAL")
-		self.stacktext:SetPoint("BOTTOM", self, "TOP", 0, 1)
+		self.stacktext:SetPoint("BOTTOM", self,"TOP",0,1)
 		self.stackBg:SetPoint("CENTER", self.stacktext)
 	end
-
-		self:EnableMouse(false)
-
+	self:EnableMouse(false)
 end
-local function iconOnHide(self)
-	self.stacktext:Hide()
-	self.border:Hide()
-	self.cooldown:Hide()
-	self.durationtext:Hide()
-	self.durationBg:Hide()
-	self.stackBg:Hide()
-end
-local function CreateBuffIcon(frame,i)
-	frame.fPBiconsFrame.iconsFrame[i] = CreateFrame("Button")
-	frame.fPBiconsFrame.iconsFrame[i]:SetParent(frame.fPBiconsFrame)
-	local buffIcon = frame.fPBiconsFrame.iconsFrame[i]
 
-	buffIcon.texture = buffIcon:CreateTexture(nil, "BACKGROUND")
+--------------------------------------------------------------------------
+-- CHANGED to pass the container we want (Buff or Debuff).
+--------------------------------------------------------------------------
+local function CreateBuffIcon(container, i)
+	local auraIcon= CreateFrame("Button", nil, container)
+	-- Note we pass "container" as parent, NOT "frame".
+	auraIcon.texture= auraIcon:CreateTexture(nil, "BACKGROUND")
+	auraIcon.border = auraIcon:CreateTexture(nil, "BORDER")
+	
+	auraIcon.cooldown= CreateFrame("Cooldown", nil, auraIcon, "CooldownFrameTemplate")
+	auraIcon.cooldown:SetReverse(true)
+	auraIcon.cooldown:SetDrawEdge(false)
 
-	buffIcon.border = buffIcon:CreateTexture(nil,"BORDER")
+	auraIcon.durationtext= auraIcon:CreateFontString(nil, "ARTWORK")
+	auraIcon.durationBg   = auraIcon:CreateTexture(nil, "BORDER")
+	auraIcon.durationBg:SetVertexColor(0,0,0,.75)
 
-	buffIcon.cooldown = CreateFrame("Cooldown", nil, buffIcon, "CooldownFrameTemplate")
-	buffIcon.cooldown:SetReverse(true)
-	buffIcon.cooldown:SetDrawEdge(false)
+	auraIcon.stacktext= auraIcon:CreateFontString(nil, "ARTWORK")
+	auraIcon.stackBg  = auraIcon:CreateTexture(nil, "BORDER")
+	auraIcon.stackBg:SetVertexColor(0,0,0,.75)
 
-	buffIcon.durationtext = buffIcon:CreateFontString(nil, "ARTWORK")
+	UpdateBuffIconOptions(auraIcon)
 
-	buffIcon.durationBg = buffIcon:CreateTexture(nil,"BORDER")
-	buffIcon.durationBg:SetVertexColor(0,0,0,.75)
+	auraIcon.stacktext:Hide()
+	auraIcon.border:Hide()
+	auraIcon.cooldown:Hide()
+	auraIcon.durationtext:Hide()
+	auraIcon.durationBg:Hide()
+	auraIcon.stackBg:Hide()
 
-	buffIcon.stacktext = buffIcon:CreateFontString(nil, "ARTWORK")
-
-	buffIcon.stackBg = buffIcon:CreateTexture(nil,"BORDER")
-	buffIcon.stackBg:SetVertexColor(0,0,0,.75)
-
-	UpdateBuffIconOptions(buffIcon)
-
-	buffIcon.stacktext:Hide()
-	buffIcon.border:Hide()
-	buffIcon.cooldown:Hide()
-	buffIcon.durationtext:Hide()
-	buffIcon.durationBg:Hide()
-	buffIcon.stackBg:Hide()
-
-	buffIcon:SetScript("OnHide", iconOnHide)
-	buffIcon:SetScript("OnUpdate", iconOnUpdate)
+	auraIcon:SetScript("OnHide", iconOnHide)
+	auraIcon:SetScript("OnUpdate", iconOnUpdate)
 
 	if MSQ then
-		Group:AddButton(buffIcon,{
-			Icon = buffIcon.texture,
-			Cooldown = buffIcon.cooldown,
-			Normal = buffIcon.border,
-			Count = false,
-			Duration = false,
-			FloatingBG = false,
-			Flash = false,
-			Pushed = false,
-			Disabled = false,
-			Checked = false,
-			Border = false,
-			AutoCastable = false,
-			Highlight = false,
-			HotKey = false,
-			Name = false,
-			AutoCast = false,
+		Group:AddButton(auraIcon, {
+			Icon= auraIcon.texture,
+			Cooldown= auraIcon.cooldown,
+			Normal= auraIcon.border,
+			Count= false,
+			Duration= false,
+			FloatingBG= false,
+			Flash= false,
+			Pushed= false,
+			Disabled= false,
+			Checked= false,
+			Border= false,
+			AutoCastable= false,
+			Highlight= false,
+			HotKey= false,
+			Name= false,
+			AutoCast= false,
 		})
 	end
+	return auraIcon
 end
 
-local function UpdateUnitAuras(nameplateID,updateOptions)
-	local frame = C_NamePlate_GetNamePlateForUnit(nameplateID)
-	if not frame then return end 	-- modifying friendly nameplates is restricted in instances since 7.2
+--------------------------------------------------------------------------
+-- NEW or CHANGED: We do everything in UpdateUnitAuras, but we create
+-- separate frames for buffs vs. debuffs, fill them, then layout them.
+--------------------------------------------------------------------------
+local function UpdateUnitAuras(nameplateID, updateOptions)
+	local frame= C_NamePlate_GetNamePlateForUnit(nameplateID)
+	if not frame then return end
 
 	if FilterUnits(nameplateID) then
-		if frame.fPBiconsFrame then
-			frame.fPBiconsFrame:Hide()
-		end
+		-- Hide both frames if present
+		if frame.fPBiconsFrameBuffs   then frame.fPBiconsFrameBuffs:Hide() end
+		if frame.fPBiconsFrameDebuffs then frame.fPBiconsFrameDebuffs:Hide() end
 		return
 	end
 
 	ScanUnitBuffs(nameplateID, frame)
 	if not PlatesBuffs[frame] then
-		if frame.fPBiconsFrame then
-			frame.fPBiconsFrame:Hide()
-		end
+		if frame.fPBiconsFrameBuffs   then frame.fPBiconsFrameBuffs:Hide() end
+		if frame.fPBiconsFrameDebuffs then frame.fPBiconsFrameDebuffs:Hide() end
 		return
 	end
+
+	-- sort if needed
 	if not db.disableSort then
-		table_sort(PlatesBuffs[frame],SortFunc)
+		table_sort(PlatesBuffs[frame].buffs, SortFunc)
+		table_sort(PlatesBuffs[frame].debuffs, SortFunc)
 	end
 
-	if not frame.fPBiconsFrame then
-		-- if parent == frame then it will change scale and alpha with nameplates
-		-- otherwise use UIParent, but this causes mess of icon/border textures
-		frame.fPBiconsFrame = CreateFrame("Frame")
-		local parent = db.parentWorldFrame and WorldFrame
-		if not parent then
-			parent = frame
+	-- If needed, create 2 frames:
+	if not frame.fPBiconsFrameBuffs then
+		local parent= db.parentWorldFrame and WorldFrame or frame
+		frame.fPBiconsFrameBuffs= CreateFrame("Frame", nil, parent)
+		frame.fPBiconsFrameBuffs.iconsFrame= {}
+	end
+	if not frame.fPBiconsFrameDebuffs then
+		local parent= db.parentWorldFrame and WorldFrame or frame
+		frame.fPBiconsFrameDebuffs= CreateFrame("Frame", nil, parent)
+		frame.fPBiconsFrameDebuffs.iconsFrame= {}
+	end
+
+	local buffIcons= frame.fPBiconsFrameBuffs.iconsFrame
+	local debuffIcons= frame.fPBiconsFrameDebuffs.iconsFrame
+
+	frame.fPBiconsFrameBuffs:Hide()
+	frame.fPBiconsFrameDebuffs:Hide()
+
+	--------------------------------------------------------------------------
+	-- 1) Buff icons
+	--------------------------------------------------------------------------
+	local buffs= PlatesBuffs[frame].buffs
+	for i=1, #buffs do
+		if not buffIcons[i] then
+			buffIcons[i]= CreateBuffIcon(frame.fPBiconsFrameBuffs, i)
 		end
-		frame.fPBiconsFrame:SetParent(parent)
-	end
-	if not frame.fPBiconsFrame.iconsFrame then
-		frame.fPBiconsFrame.iconsFrame = {}
-	end
+		local aura= buffs[i]
+		local icon= buffIcons[i]
+		icon.type= aura.type
+		icon.icon= aura.icon
+		icon.stack= aura.stack
+		icon.debufftype= aura.debufftype
+		icon.duration= aura.duration
+		icon.expiration= aura.expiration
+		icon.id= aura.id
+		icon.durationSize= aura.durationSize
+		icon.stackSize= aura.stackSize
+		icon.width= db.baseWidth* aura.scale
+		icon.height= db.baseHeight* aura.scale
 
-
-
-	for i = 1, #PlatesBuffs[frame] do
-		if not frame.fPBiconsFrame.iconsFrame[i] then
-			CreateBuffIcon(frame,i)
-		end
-
-		local buff = PlatesBuffs[frame][i]
-		local buffIcon = frame.fPBiconsFrame.iconsFrame[i]
-		buffIcon.type = buff.type
-		buffIcon.icon = buff.icon
-		buffIcon.stack = buff.stack
-		buffIcon.debufftype = buff.debufftype
-		buffIcon.duration = buff.duration
-		buffIcon.expiration = buff.expiration
-		buffIcon.id = buff.id
-		buffIcon.durationSize = buff.durationSize
-		buffIcon.stackSize = buff.stackSize
-		buffIcon.width = db.baseWidth * buff.scale
-		buffIcon.height = db.baseHeight * buff.scale
 		if updateOptions then
-			UpdateBuffIconOptions(buffIcon)
+			UpdateBuffIconOptions(icon)
 		end
-		UpdateBuffIcon(buffIcon)
-		buffIcon:Show()
+		UpdateBuffIcon(icon)
+		icon:Show()
 	end
-	frame.fPBiconsFrame:Show()
+	for i=#buffs+1, #buffIcons do
+		buffIcons[i]:Hide()
+	end
 
-	if #frame.fPBiconsFrame.iconsFrame > #PlatesBuffs[frame] then
-		for i = #PlatesBuffs[frame]+1, #frame.fPBiconsFrame.iconsFrame do
-			if frame.fPBiconsFrame.iconsFrame[i] then
-				frame.fPBiconsFrame.iconsFrame[i]:Hide()
+	-- layout buffs
+	LayoutIcons(frame.fPBiconsFrameBuffs, buffIcons, true)
+	frame.fPBiconsFrameBuffs:Show()
+
+	-- anchor buff frame
+	frame.fPBiconsFrameBuffs:ClearAllPoints()
+	frame.fPBiconsFrameBuffs:SetPoint(
+		db.buffAnchorPoint,
+		frame,
+		db.plateAnchorPointBuff,
+		db.xOffsetBuff,
+		db.yOffsetBuff
+	)
+
+	--------------------------------------------------------------------------
+	-- 2) Debuff icons
+	--------------------------------------------------------------------------
+	local debuffs= PlatesBuffs[frame].debuffs
+	for i=1, #debuffs do
+		if not debuffIcons[i] then
+			debuffIcons[i]= CreateBuffIcon(frame.fPBiconsFrameDebuffs, i)
+		end
+		local aura= debuffs[i]
+		local icon= debuffIcons[i]
+		icon.type= aura.type
+		icon.icon= aura.icon
+		icon.stack= aura.stack
+		icon.debufftype= aura.debufftype
+		icon.duration= aura.duration
+		icon.expiration= aura.expiration
+		icon.id= aura.id
+		icon.durationSize= aura.durationSize
+		icon.stackSize= aura.stackSize
+		icon.width= db.baseWidth* aura.scale
+		icon.height= db.baseHeight* aura.scale
+
+		if updateOptions then
+			UpdateBuffIconOptions(icon)
+		end
+		UpdateBuffIcon(icon)
+		icon:Show()
+	end
+	for i=#debuffs+1, #debuffIcons do
+		debuffIcons[i]:Hide()
+	end
+
+	-- layout debuffs
+	LayoutIcons(frame.fPBiconsFrameDebuffs, debuffIcons, false)
+	frame.fPBiconsFrameDebuffs:Show()
+
+	-- anchor debuff frame
+	frame.fPBiconsFrameDebuffs:ClearAllPoints()
+	frame.fPBiconsFrameDebuffs:SetPoint(
+		db.debuffAnchorPoint,
+		frame,
+		db.plateAnchorPointDebuff,
+		db.xOffsetDebuff,
+		db.yOffsetDebuff
+	)
+
+	-- if Masque is used
+	if MSQ then
+		Group:ReSkin()
+	end
+end
+
+--------------------------------------------------------------------------
+--  The rest: Nameplate_Added, Nameplate_Removed, etc.
+--------------------------------------------------------------------------
+local function Nameplate_Added(nameplateID)
+	local frame= C_NamePlate_GetNamePlateForUnit(nameplateID)
+	if frame then
+		frame.namePlateUnitToken= nameplateID
+		if frame.BuffFrame then
+			if db.notHideOnPersonalResource and UnitIsUnit(nameplateID,"player") then
+				frame.BuffFrame:SetAlpha(1)
+			else
+				frame.BuffFrame:SetAlpha(0)
 			end
 		end
+		UpdateUnitAuras(nameplateID)
 	end
-
-	DrawOnPlate(frame)
 end
 
+local function Nameplate_Removed(nameplateID)
+	local frame= C_NamePlate_GetNamePlateForUnit(nameplateID)
+	if frame then
+		if frame.fPBiconsFrameBuffs then
+			frame.fPBiconsFrameBuffs:Hide()
+		end
+		if frame.fPBiconsFrameDebuffs then
+			frame.fPBiconsFrameDebuffs:Hide()
+		end
+		if PlatesBuffs[frame] then
+			PlatesBuffs[frame]= nil
+		end
+	end
+end
+
+--------------------------------------------------------------------------
+--  Exported function to refresh all nameplates
+--------------------------------------------------------------------------
 function fPB.UpdateAllNameplates(updateOptions)
-	for i, p in ipairs(C_NamePlate_GetNamePlates()) do
-		local unit = p.namePlateUnitToken
+	for _, plate in ipairs(C_NamePlate_GetNamePlates()) do
+		local unit= plate.namePlateUnitToken
 		if unit then
-			UpdateUnitAuras(unit,updateOptions)
+			UpdateUnitAuras(unit, updateOptions)
 		end
 	end
 end
-local UpdateAllNameplates = fPB.UpdateAllNameplates
+local UpdateAllNameplates= fPB.UpdateAllNameplates
 
-local function Nameplate_Added(...)
-	local nameplateID = ...
-	local frame = C_NamePlate_GetNamePlateForUnit(nameplateID)
-	if frame then frame.namePlateUnitToken = nameplateID end
-	if frame and frame.BuffFrame then
-		if db.notHideOnPersonalResource and UnitIsUnit(nameplateID,"player") then
-			frame.BuffFrame:SetAlpha(1)
-		else
-			frame.BuffFrame:SetAlpha(0)	--Hide terrible standart debuff frame
-		end
-	end
-
-	UpdateUnitAuras(nameplateID)
-end
-local function Nameplate_Removed(...)
-	local nameplateID = ...
-	local frame = C_NamePlate_GetNamePlateForUnit(nameplateID)
-
-	if frame.fPBiconsFrame then
-		frame.fPBiconsFrame:Hide()
-	end
-	if PlatesBuffs[frame] then
-		PlatesBuffs[frame] = nil
-	end
-end
-
+--------------------------------------------------------------------------
+--  Spell table management
+--------------------------------------------------------------------------
+-- ( code as yours: AddNewSpell, RemoveSpell, ChangeSpellID, etc.)
 local function FixSpells()
 	for spell,s in pairs(db.Spells) do
 		if not s.name then
 			local name
-			local spellID = tonumber(spell) and tonumber(spell) or spell.spellID
-			if spellID then
-				name = GetSpellInfo(spellID)
+			local sid= tonumber(spell) and tonumber(spell) or spell.spellID
+			if sid then
+				name= GetSpellInfo(sid)
 			else
-				name = tostring(spell)
+				name= tostring(spell)
 			end
-			db.Spells[spell].name = name
+			db.Spells[spell].name= name
 		end
 	end
 end
-function fPB.CacheSpells() -- spells filtered by names, not checking id
-	cachedSpells = {}
-	for spell,s in pairs(db.Spells) do
+
+function fPB.CacheSpells()
+	wipe(cachedSpells)
+	for spell, s in pairs(db.Spells) do
 		if not s.checkID and not db.ignoredDefaultSpells[spell] and s.name then
 			if s.spellID then
-				cachedSpells[s.name] = s.spellID
+				cachedSpells[s.name]= s.spellID
 			else
-				cachedSpells[s.name] = "noid"
+				cachedSpells[s.name]= "noid"
 			end
 		end
 	end
 end
+
 local CacheSpells = fPB.CacheSpells
 
 function fPB.AddNewSpell(spell)
@@ -786,6 +934,9 @@ function fPB.ChangeSpellID(oldID, newID)
 	fPB.BuildSpellList()
 end
 
+--------------------------------------------------------------------------
+--  DB init
+--------------------------------------------------------------------------
 local function ConvertDBto2()
 	local temp
 	for _,p in pairs(flyPlateBuffsDB.profiles) do
@@ -849,37 +1000,38 @@ local function ConvertDBto2()
 	end
 	flyPlateBuffsDB.version = 2
 end
+
 function fPB.OnProfileChanged()
-	db = fPB.db.profile
+	db= fPB.db.profile
 	fPB.OptionsOnEnable()
 	UpdateAllNameplates(true)
 end
+
 local function Initialize()
-	if flyPlateBuffsDB and (not flyPlateBuffsDB.version or flyPlateBuffsDB.version < 2) then
+	if flyPlateBuffsDB and (not flyPlateBuffsDB.version or flyPlateBuffsDB.version<2) then
 		ConvertDBto2()
 	end
+	fPB.db= LibStub("AceDB-3.0"):New("flyPlateBuffsDB", DefaultSettings, true)
+	fPB.db.RegisterCallback(fPB,"OnProfileChanged","OnProfileChanged")
+	fPB.db.RegisterCallback(fPB,"OnProfileCopied","OnProfileChanged")
+	fPB.db.RegisterCallback(fPB,"OnProfileReset","OnProfileChanged")
 
-	fPB.db = LibStub("AceDB-3.0"):New("flyPlateBuffsDB", DefaultSettings, true)
-	fPB.db.RegisterCallback(fPB, "OnProfileChanged", "OnProfileChanged")
-	fPB.db.RegisterCallback(fPB, "OnProfileCopied", "OnProfileChanged")
-	fPB.db.RegisterCallback(fPB, "OnProfileReset", "OnProfileChanged")
-
-	db = fPB.db.profile
-	fPB.font = fPB.LSM:Fetch("font", db.font)
-	fPB.stackFont = fPB.LSM:Fetch("font", db.stackFont)
+	db= fPB.db.profile
+	fPB.font= fPB.LSM:Fetch("font", db.font)
+	fPB.stackFont= fPB.LSM:Fetch("font", db.stackFont)
 	FixSpells()
-	CacheSpells()
+	fPB.CacheSpells()
 
 	config:RegisterOptionsTable(AddonName, fPB.MainOptionTable)
-	fPBMainOptions = dialog:AddToBlizOptions(AddonName, AddonName)
+	fPBMainOptions= dialog:AddToBlizOptions(AddonName, AddonName)
 
 	config:RegisterOptionsTable(AddonName.." Spells", fPB.SpellsTable)
-	fPBSpellsList = dialog:AddToBlizOptions(AddonName.." Spells", L["Specific spells"], AddonName)
+	fPBSpellsList= dialog:AddToBlizOptions(AddonName.." Spells", L["Specific spells"], AddonName)
 
 	config:RegisterOptionsTable(AddonName.." Profiles", LibStub("AceDBOptions-3.0"):GetOptionsTable(fPB.db))
-	fPBProfilesOptions = dialog:AddToBlizOptions(AddonName.." Profiles", L["Profiles"], AddonName)
+	fPBProfilesOptions= dialog:AddToBlizOptions(AddonName.." Profiles", L["Profiles"], AddonName)
 
-	SLASH_FLYPLATEBUFFS1, SLASH_FLYPLATEBUFFS2 = "/fpb", "/pb"
+	SLASH_FLYPLATEBUFFS1, SLASH_FLYPLATEBUFFS2= "/fpb","/pb"
 	function SlashCmdList.FLYPLATEBUFFS(msg, editBox)
 		InterfaceOptionsFrame_OpenToCategory(fPBMainOptions)
 		InterfaceOptionsFrame_OpenToCategory(fPBSpellsList)
@@ -896,19 +1048,21 @@ function fPB.UnregisterCombat()
 	fPB.Events:UnregisterEvent("PLAYER_REGEN_ENABLED")
 end
 
-fPB.Events = CreateFrame("Frame")
+fPB.Events= CreateFrame("Frame")
 fPB.Events:RegisterEvent("ADDON_LOADED")
 fPB.Events:RegisterEvent("PLAYER_LOGIN")
 
 fPB.Events:SetScript("OnEvent", function(self, event, ...)
-	if event == "ADDON_LOADED" and (...) == AddonName then
+	if event=="ADDON_LOADED" and (...)==AddonName then
 		Initialize()
-	elseif event == "PLAYER_LOGIN" then
+	elseif event=="PLAYER_LOGIN" then
 		fPB.OptionsOnEnable()
-		if db.showSpellID then fPB.ShowSpellID() end
-		MSQ = LibStub("Masque", true)
+		if db.showSpellID then
+			fPB.ShowSpellID()
+		end
+		MSQ= LibStub("Masque",true)
 		if MSQ then
-			Group = MSQ:Group(AddonName)
+			Group= MSQ:Group(AddonName)
 			MSQ:Register(AddonName, function(addon, group, skinId, gloss, backdrop, colors, disabled)
 				if disabled then
 					UpdateAllNameplates(true)
@@ -924,19 +1078,20 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
 		else
 			fPB.Events:RegisterEvent("UNIT_AURA")
 		end
-	elseif event == "PLAYER_REGEN_DISABLED" then
+	elseif event=="PLAYER_REGEN_DISABLED" then
 		fPB.Events:RegisterEvent("UNIT_AURA")
 		UpdateAllNameplates()
-	elseif event == "PLAYER_REGEN_ENABLED" then
+	elseif event=="PLAYER_REGEN_ENABLED" then
 		fPB.Events:UnregisterEvent("UNIT_AURA")
 		UpdateAllNameplates()
-	elseif event == "NAME_PLATE_UNIT_ADDED" then
+	elseif event=="NAME_PLATE_UNIT_ADDED" then
 		Nameplate_Added(...)
-	elseif event == "NAME_PLATE_UNIT_REMOVED" then
+	elseif event=="NAME_PLATE_UNIT_REMOVED" then
 		Nameplate_Removed(...)
-	elseif event == "UNIT_AURA" then
-		if ... and strmatch((...),"nameplate%d+") then
-			UpdateUnitAuras(...)
+	elseif event=="UNIT_AURA" then
+		local unit= ...
+		if unit and strmatch(unit,"nameplate%d+") then
+			UpdateUnitAuras(unit)
 		end
 	end
 end)

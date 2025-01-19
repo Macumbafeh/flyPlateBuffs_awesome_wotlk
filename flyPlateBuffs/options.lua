@@ -253,7 +253,7 @@ fPB.MainOptionTable = {
 					order = 7,
 					type = "toggle",
 					name = L["Show decimals"],
-					desc = L["when less than 10 seconds"],
+					desc = L["when less than 5 seconds"],
 					disabled = function() return not db.showDuration end,
 				},
 				blank1 = {
@@ -487,66 +487,179 @@ fPB.MainOptionTable = {
 			},
 		},
 		positionSettings = {
-			order = 3,
-			name = L["Position Settings"],
-			type = "group",
-			args = {
-				buffAnchorPoint = {
-					order = 1,
-					type = "select",
-					style = "dropdown",
-					name = L["Buff frame's Anchor point"],
-					desc = L["It will be attached to the nameplate at this point"],
-					values = {
-						["BOTTOMLEFT"] = L["Left"],
-						["BOTTOM"] = L["Center"],
-						["BOTTOMRIGHT"] = L["Right"],
-					},
-				},
-				plateAnchorPoint = {
-					order = 2,
-					type = "select",
-					style = "dropdown",
-					name = L["Nameplate's Anchor point"],
-					desc = L["Buff frame will be anchored to this point of the nameplate"],
-					values = {
-						["TOPLEFT"] = L["Left"],
-						["TOP"] = L["Center"],
-						["TOPRIGHT"] = L["Right"],
-					},
-				},
-				blank1 = {
+    order = 3,
+    name = L["Position Settings"],
+    type = "group",
+    args = {
+        buffPositionSettings = {
+            order = 1,
+            name = L["Buff Position"],
+            type = "group",
+            inline = true, -- Makes it appear as a subgroup
+            args = {
+                buffAnchorPoint = {
+                    order = 1,
+                    type = "select",
+                    style = "dropdown",
+                    name = L["Buff Frame's Anchor Point"],
+                    desc = L["It will be attached to the nameplate at this point"],
+                    values = {
+                        ["BOTTOMLEFT"] = L["Bottom Left"],
+                        ["BOTTOM"] = L["Bottom Center"],
+                        ["BOTTOMRIGHT"] = L["Bottom Right"],
+                        ["LEFT"] = L["Left"],
+                        ["CENTER"] = L["Center"],
+                        ["RIGHT"] = L["Right"],
+                        ["TOPLEFT"] = L["Top Left"],
+                        ["TOP"] = L["Top Center"],
+                        ["TOPRIGHT"] = L["Top Right"],
+                    },
+                },
+                plateAnchorPointBuff = {
+                    order = 2,
+                    type = "select",
+                    style = "dropdown",
+                    name = L["Nameplate's Anchor Point for Buffs"],
+                    desc = L["Buff frame will be anchored to this point of the nameplate"],
+                    values = {
+                        ["TOPLEFT"] = L["Top Left"],
+                        ["TOP"] = L["Top Center"],
+                        ["TOPRIGHT"] = L["Top Right"],
+                        ["LEFT"] = L["Left"],
+                        ["CENTER"] = L["Center"],
+                        ["RIGHT"] = L["Right"],
+                        ["BOTTOMLEFT"] = L["Bottom Left"],
+                        ["BOTTOM"] = L["Bottom Center"],
+                        ["BOTTOMRIGHT"] = L["Bottom Right"],
+                    },
+                },
+				blank3 = {
 					order = 3,
 					type = "description",
 					name = "",
 					width = "normal",
 				},
-				xOffset = {
-					order = 4,
-					type = "range",
-					name = L["Offset X"],
-					desc = L["Horizontal offset of buff frame"],
-					min = -256,
-					max = 256,
-					step = 1,
+                xOffsetBuff = {
+                    order = 4,
+                    type = "range",
+                    name = L["Buff Offset X"],
+                    desc = L["Horizontal offset of buff frame"],
+                    min = -256,
+                    max = 256,
+                    step = 1,
+                },
+                yOffsetBuff = {
+                    order = 5,
+                    type = "range",
+                    name = L["Buff Offset Y"],
+                    desc = L["Vertical offset of buff frame"],
+                    min = -256,
+                    max = 256,
+                    step = 1,
+                },
+            },
+        },
+        debuffPositionSettings = {
+            order = 2,
+            name = L["Debuff Position"],
+            type = "group",
+            inline = true, -- Makes it appear as a subgroup
+            args = {
+                debuffAnchorPoint = {
+                    order = 1,
+                    type = "select",
+                    style = "dropdown",
+                    name = L["Debuff Frame's Anchor Point"],
+                    desc = L["It will be attached to the nameplate at this point"],
+                    values = {
+                        ["BOTTOMLEFT"] = L["Bottom Left"],
+                        ["BOTTOM"] = L["Bottom Center"],
+                        ["BOTTOMRIGHT"] = L["Bottom Right"],
+                        ["LEFT"] = L["Left"],
+                        ["CENTER"] = L["Center"],
+                        ["RIGHT"] = L["Right"],
+                        ["TOPLEFT"] = L["Top Left"],
+                        ["TOP"] = L["Top Center"],
+                        ["TOPRIGHT"] = L["Top Right"],
+                    },
+                },
+                plateAnchorPointDebuff = {
+                    order = 2,
+                    type = "select",
+                    style = "dropdown",
+                    name = L["Nameplate's Anchor Point for Debuffs"],
+                    desc = L["Debuff frame will be anchored to this point of the nameplate"],
+                    values = {
+                        ["TOPLEFT"] = L["Top Left"],
+                        ["TOP"] = L["Top Center"],
+                        ["TOPRIGHT"] = L["Top Right"],
+                        ["LEFT"] = L["Left"],
+                        ["CENTER"] = L["Center"],
+                        ["RIGHT"] = L["Right"],
+                        ["BOTTOMLEFT"] = L["Bottom Left"],
+                        ["BOTTOM"] = L["Bottom Center"],
+                        ["BOTTOMRIGHT"] = L["Bottom Right"],
+                    },
+                },
+				blank3 = {
+					order = 3,
+					type = "description",
+					name = "",
+					width = "normal",
 				},
-				yOffset = {
-					order = 5,
-					type = "range",
-					name = L["Offset Y"],
-					desc = L["Vertical offset of buff frame"],
-					min = -256,
-					max = 256,
-					step = 1,
-				},
+                xOffsetDebuff = {
+                    order = 4,
+                    type = "range",
+                    name = L["Debuff Offset X"],
+                    desc = L["Horizontal offset of debuff frame"],
+                    min = -256,
+                    max = 256,
+                    step = 1,
+                },
+                yOffsetDebuff = {
+                    order = 5,
+                    type = "range",
+                    name = L["Debuff Offset Y"],
+                    desc = L["Vertical offset of debuff frame"],
+                    min = -256,
+                    max = 256,
+                    step = 1,
+                },
+            },
+        },
+		GeneralPositionSettings = {
+            order = 3,
+            name = L["General Position"],
+            type = "group",
+            inline = true, -- Makes it appear as a subgroup
+            args = {
+        
+				xInterval = {
+            order = 2,
+            type = "range",
+            name = L["Interval X"],
+            desc = L["Horizontal spacing between icons"],
+            min = minInterval,
+            max = maxInterval,
+            step = 1,
+        },
+        yInterval = {
+            order = 3,
+            type = "range",
+            name = L["Interval Y"],
+            desc = L["Vertical spacing between icons"],
+            min = minInterval,
+            max = maxInterval,
+            step = 1,
+        },
 				blank2 = {
-					order = 6,
+					order = 4,
 					type = "description",
 					name = "",
 					width = "normal",
 				},
 				buffPerLine = {
-					order = 7,
+					order = 5,
 					type = "range",
 					name = L["Icons per row"],
 					desc = L["If more icons they will be moved to a new row"],
@@ -555,7 +668,7 @@ fPB.MainOptionTable = {
 					step = 1,
 				},
 				numLines = {
-					order = 8,
+					order = 6,
 					type = "range",
 					name = L["Max rows"],
 					desc = L["Excess buffs will not be displayed"],
@@ -564,51 +677,49 @@ fPB.MainOptionTable = {
 					step = 1,
 				},
 				blank3 = {
-					order = 9,
+					order = 7,
 					type = "description",
 					name = "",
 					width = "normal",
 				},
-				xInterval = {
-					order = 10,
-					type = "range",
-					name = L["Interval X"],
-					desc = L["Horizontal spacing between icons"],
-					min = minInterval,
-					max = maxInterval,
-					step = 1,
-				},
-				yInterval = {
-					order = 11,
-					type = "range",
-					name = L["Interval Y"],
-					desc = L["Vertical spacing between icons"],
-					min = minInterval,
-					max = maxInterval,
-					step = 1,
-				},
-				break1 = {
-					order = 12,
-					type = "header",
-					name = "",
-				},
-				parentWorldFrame = {
-					order = 13,
-					type = "toggle",
-					name = L["Always show icons with full opacity and size"],
-					desc = L["Icons will not change on nontargeted nameplates.\n\n|cFFFF0000REALLY NOT RECOMMEND|r\nWhen icons overlay there will be mess of textures, digits etc."],
-					width = "full",
-					set = function(info, value)
-						db[info[#info]] = value
-						for n, frame in ipairs(C_NamePlate.GetNamePlates()) do
-							if frame.fPBiconsFrame and frame.fPBiconsFrame.iconsFrame then
-								frame.fPBiconsFrame:SetParent(value and WorldFrame or frame)
-							end
-						end
-					end,
-				},
+				
+        break1 = {
+            order = 8,
+            type = "header",
+            name = "",
+        },
+		--[[ lockBuffRow = {
+			order = 9,
+			type = "toggle",
+			name = L["Lock Buff Row"],
+			desc = L["Prevent buff row from moving when debuffs appear"],
+			set = function(info, value) ]]
+      --  db[info[#info]] = value
+     --[[  fPB.UpdateAllNameplates(true)
+    end,
+    get = function(info)
+        return db[info[#info]]
+		-- end,
+		-- }, 
+        parentWorldFrame = {
+            order = 10,
+            type = "toggle",
+            name = L["Always show icons with full opacity and size"],
+            desc = L["Icons will not change on non-targeted nameplates.\n\n|cFFFF0000REALLY NOT RECOMMEND|r\nWhen icons overlay, there will be a mess of textures, digits, etc."],
+            width = "full",
+            set = function(info, value)
+                db[info[#info]] = value
+                for n, frame in ipairs(C_NamePlate.GetNamePlates()) do
+                    if frame.fPBiconsFrame and frame.fPBiconsFrame.iconsFrame then
+                        frame.fPBiconsFrame:SetParent(value and WorldFrame or frame)
+                    end
+                end
+            end,
 			},
-		},
+			},
+        },
+    },
+},
 		sortSettings = {
 			order = 4,
 			name = L["Sorting"],
