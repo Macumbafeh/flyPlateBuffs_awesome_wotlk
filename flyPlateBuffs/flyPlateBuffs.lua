@@ -53,18 +53,24 @@ local DefaultSettings = {
 		myScale = 0.2,
 		cropTexture = true,
 
-		buffAnchorPoint = "BOTTOM",
-		plateAnchorPoint = "TOP",
+		-- Buff Position Settings
+        buffAnchorPoint = "BOTTOM",
+        plateAnchorPointBuff = "TOP",
+        xOffsetBuff = -63,
+        yOffsetBuff = 45,
 
-		xInterval = 4,
-		yInterval = 12,
-
-		xOffset = 0,
-		yOffset = 4,
-
-		buffPerLine = 6,
+        -- Debuff Position Settings
+        debuffAnchorPoint = "TOP",
+        plateAnchorPointDebuff = "BOTTOM",
+        xOffsetDebuff = -61,
+        yOffsetDebuff = 73,
+		
+		xInterval = 3,
+		yInterval = 6,
+		
+		buffPerLine = 5,
 		numLines = 3,
-
+		
 		showStdCooldown = true,
 		showStdSwipe = false,
 
@@ -118,9 +124,9 @@ for i=1, #defaultSpells1 do
 			name = name,
 			spellID = spellID,
 			scale = 1,
-			durationSize = 30, --seems like the player cant change this value ingame (the setting has no effect), so setting it here
+			durationSize = 20, --seems like the player cant change this value ingame (the setting has no effect), so setting it here
 			show = 1,	-- 1 = always, 2 = mine, 3 = never, 4 = on ally, 5 = on enemy
-			stackSize = 18,
+			stackSize = 16,
 		}
 	end
 end
@@ -149,7 +155,7 @@ local aboutMinute, aboutHour, aboutDay = 59.5, 60 * 59.5, 3600 * 23.5
 local function round(x) return floor(x + 0.5) end
 
 local function FormatTime(seconds)
-	if seconds < 1 and db.showDecimals then --this used to be 10 seconds(it still shows as "10" in the ingame options but im too lazy to edit it there so cba...
+	if seconds < 5 and db.showDecimals then --this used to be 10 seconds(it still shows as "10" in the ingame options but im too lazy to edit it there so cba...
 		return "%.1f", seconds
 	elseif seconds < aboutMinute then
 		local seconds = round(seconds)
@@ -167,17 +173,32 @@ end
 local function GetColorByTime(current, max)
     if max == 0 then max = 1 end
     local timeLeft = current
-    local red, green, blue = 1, 1, 1  -- start as white all the way down
+    local red, green, blue = 1, 1, 1  -- Default color: white
 
-    if timeLeft <= 1 then
-        -- change the color smoothly at the very end into red
-        red = 1
-        green = timeLeft
-        blue = timeLeft
+    if timeLeft < 10 then
+        if timeLeft < 5 then
+            if timeLeft < 1 then
+                -- Red at 1 second or less
+                red, green, blue = 1, 0, 0
+            else
+                -- Interpolate between yellow and red
+                local t = (timeLeft - 1) / 4  -- Normalize between 1 and 5
+                red = 1
+                green = t  -- Decreases from 1 to 0
+                blue = 0
+            end
+        else
+            -- Interpolate between green and yellow
+            local t = (10 - timeLeft) / 5  -- Normalize between 5 and 10
+            red = t  -- Increases from 0 to 1
+            green = 1
+            blue = 0
+        end
     end
 
     return red, green, blue
 end
+
 
 
 local function SortFunc(a,b)
@@ -204,69 +225,133 @@ local function SortFunc(a,b)
 end
 
 local function DrawOnPlate(frame)
+    if not (PlatesBuffs[frame].buffs[1] or PlatesBuffs[frame].debuffs[1]) then return end
 
-	if not (#frame.fPBiconsFrame.iconsFrame > 0) then return end
+    local maxWidth = 0
+    local sumHeight = 0
+    local buffIcons = frame.fPBiconsFrame.iconsFrame
 
-	local maxWidth = 0
-	local sumHeight = 0
+    -- Helper function to layout icons
+    local function LayoutIcons(iconList, positionSettings)
+    local maxWidth = 0
+    local sumHeight = 0
 
-	local buffIcon = frame.fPBiconsFrame.iconsFrame
+    for l = 1, db.numLines do
+        local lineWidth = 0
+        local lineHeight = 0
 
-	local breaked = false
-	for l = 1, db.numLines do
-		if breaked then break end
+        for k = 1, db.buffPerLine do
+            local index = (l - 1) * db.buffPerLine + k
+            local icon = iconList[index]
+            if not icon or not icon:IsShown() then break end
+			
+			-- Debugging: Print icon index and type
+            -- print("Laying out icon index:", index, "Type:", icon.type)
+			
+            icon:ClearAllPoints()
+            if l == 1 and k == 1 then
+                -- First icon in the first line
+                icon:SetPoint(positionSettings.buffAnchorPoint, frame.fPBiconsFrame, positionSettings.plateAnchorPointBuff, positionSettings.xOffsetBuff, positionSettings.yOffsetBuff)
+            elseif k == 1 then
+                -- First icon in subsequent lines
+                local previousLineLastIcon = (l - 2) * db.buffPerLine + 1
+                icon:SetPoint("BOTTOMLEFT", iconList[previousLineLastIcon], "TOPLEFT", 0, db.yInterval)
+            else
+                -- Icons within the same line
+                icon:SetPoint("BOTTOMLEFT", iconList[index - 1], "BOTTOMRIGHT", db.xInterval, 0)
+            end
 
-		local lineWidth = 0
-		local lineHeight = 0
+            lineWidth = lineWidth + (icon.width or db.baseWidth) + db.xInterval
+            lineHeight = math.max(icon.height or db.baseHeight, lineHeight)
+        end
+        maxWidth = math.max(maxWidth, lineWidth)
+        sumHeight = sumHeight + lineHeight + db.yInterval
+    end
 
-		for k = 1, db.buffPerLine do
-
-			local i = db.buffPerLine*(l-1)+k
-			if not buffIcon[i] or not buffIcon[i]:IsShown() then breaked = true; break end
-			buffIcon[i]:ClearAllPoints()
-			if l == 1 and k == 1 then
-				buffIcon[i]:SetPoint("BOTTOMLEFT", frame.fPBiconsFrame, "BOTTOMLEFT", 0, 0)
-			elseif k == 1 then
-				buffIcon[i]:SetPoint("BOTTOMLEFT", buffIcon[i-db.buffPerLine], "TOPLEFT", 0, db.yInterval)
-			else
-				buffIcon[i]:SetPoint("BOTTOMLEFT", buffIcon[i-1], "BOTTOMRIGHT", db.xInterval, 0)
-			end
-
-			lineWidth = lineWidth + buffIcon[i].width + db.xInterval
-			lineHeight = (buffIcon[i].height > lineHeight) and buffIcon[i].height or lineHeight
-		end
-		maxWidth = max(maxWidth, lineWidth)
-		sumHeight = sumHeight + lineHeight + db.yInterval
-	end
-	if #PlatesBuffs[frame] > db.numLines * db.buffPerLine then
-		for i = db.numLines * db.buffPerLine + 1, #PlatesBuffs[frame] do
-			buffIcon[i]:Hide()
-		end
-	end
-	frame.fPBiconsFrame:SetWidth(maxWidth-db.xInterval)
-	frame.fPBiconsFrame:SetHeight(sumHeight - db.yInterval)
-	frame.fPBiconsFrame:ClearAllPoints()
-	frame.fPBiconsFrame:SetPoint(db.buffAnchorPoint,frame,db.plateAnchorPoint,db.xOffset,db.yOffset)
-	if MSQ then
-		Group:ReSkin()
-	end
+    -- Set Frame Size
+    frame.fPBiconsFrame:SetWidth(maxWidth - db.xInterval)
+    frame.fPBiconsFrame:SetHeight(sumHeight - db.yInterval)
 end
+
+
+    -- Extract Buff Frames
+    local buffCount = #PlatesBuffs[frame].buffs
+    local buffFrames = {}
+    for i = 1, buffCount do
+        buffFrames[i] = buffIcons[i]
+    end
+
+    -- Layout Buffs
+    LayoutIcons(buffFrames, {
+        buffAnchorPoint = db.buffAnchorPoint,
+        plateAnchorPointBuff = db.plateAnchorPointBuff,
+        xOffsetBuff = db.xOffsetBuff,
+        yOffsetBuff = db.yOffsetBuff,
+    })
+
+    -- Extract Debuff Frames
+    local debuffCount = #PlatesBuffs[frame].debuffs
+    local debuffFrames = {}
+    for i = 1, debuffCount do
+        debuffFrames[i] = buffIcons[buffCount + i]
+    end
+
+    -- Layout Debuffs with Debuff-specific Settings
+    LayoutIcons(debuffFrames, {
+        buffAnchorPoint = db.debuffAnchorPoint,
+        plateAnchorPointBuff = db.plateAnchorPointDebuff,
+        xOffsetBuff = db.xOffsetDebuff,
+        yOffsetBuff = db.yOffsetDebuff,
+    })
+
+    -- Hide any extra icons beyond the current layout
+    local totalIcons = buffCount + debuffCount
+    for i = totalIcons + 1, #buffIcons do
+        if buffIcons[i] then
+            buffIcons[i]:Hide()
+        end
+    end
+
+    -- Set Frame Position
+    frame.fPBiconsFrame:ClearAllPoints()
+    frame.fPBiconsFrame:SetPoint(db.buffAnchorPoint, frame, db.plateAnchorPoint, db.xOffset, db.yOffset)
+
+    if MSQ then
+        Group:ReSkin()
+    end
+end
+
+
+
 
 local function AddBuff(frame, type, icon, stack, debufftype, duration, expiration, my, id, scale, durationSize, stackSize)
-	if not PlatesBuffs[frame] then PlatesBuffs[frame] = {} end
-	PlatesBuffs[frame][#PlatesBuffs[frame] + 1] = {
-		type = type,
-		icon = icon,
-		stack = stack,
-		debufftype = debufftype,
-		duration = duration,
-		expiration = expiration,
-		scale = (my and db.myScale + 1 or 1) * (scale or 1),
-		durationSize = durationSize,
-		stackSize = stackSize,
-		id = id,
-	}
+    if not PlatesBuffs[frame] then
+        PlatesBuffs[frame] = {
+            buffs = {},
+            debuffs = {}
+        }
+    end
+
+    local buffData = {
+        type = type,
+        icon = icon,
+        stack = stack,
+        debufftype = debufftype,
+        duration = duration,
+        expiration = expiration,
+        scale = (my and db.myScale + 1 or 1) * (scale or 1),
+        durationSize = durationSize,
+        stackSize = stackSize,
+        id = id,
+    }
+
+    if type == "HELPFUL" then
+        table.insert(PlatesBuffs[frame].buffs, buffData)
+    elseif type == "HARMFUL" then
+        table.insert(PlatesBuffs[frame].debuffs, buffData)
+    end
 end
+
 
 local function FilterBuffs(isAlly, frame, type, name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
 	if type == "HARMFUL" and db.showDebuffs == 5 then return end
@@ -317,24 +402,32 @@ end
 
 local function ScanUnitBuffs(nameplateID, frame)
 
-	if PlatesBuffs[frame] then
-		wipe(PlatesBuffs[frame])
-	end
-	local isAlly = UnitIsFriend(nameplateID,"player")
-	local id = 1
-	while UnitDebuff(nameplateID,id) do
-		local name, rank, icon, stack, debufftype, duration, expiration, caster, _, _, spellID = UnitDebuff(nameplateID, id)
-		FilterBuffs(isAlly, frame, "HARMFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
-		id = id + 1
-	end
+    if PlatesBuffs[frame] then
+        wipe(PlatesBuffs[frame].buffs)
+        wipe(PlatesBuffs[frame].debuffs)
+    else
+        PlatesBuffs[frame] = {
+            buffs = {},
+            debuffs = {}
+        }
+    end
 
-	id = 1
-	while UnitBuff(nameplateID,id) do
-		local name, rank, icon, stack, debufftype, duration, expiration, caster, _, _, spellID = UnitBuff(nameplateID, id)
-		FilterBuffs(isAlly, frame, "HELPFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
-		id = id + 1
-	end
+    local isAlly = UnitIsFriend(nameplateID, "player")
+    local id = 1
+    while UnitDebuff(nameplateID, id) do
+        local name, rank, icon, stack, debufftype, duration, expiration, caster, _, _, spellID = UnitDebuff(nameplateID, id)
+        FilterBuffs(isAlly, frame, "HARMFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
+        id = id + 1
+    end
+
+    id = 1
+    while UnitBuff(nameplateID, id) do
+        local name, rank, icon, stack, debufftype, duration, expiration, caster, _, _, spellID = UnitBuff(nameplateID, id)
+        FilterBuffs(isAlly, frame, "HELPFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, id)
+        id = id + 1
+    end
 end
+
 
 local function FilterUnits(nameplateID)
 
@@ -523,142 +616,167 @@ local function iconOnHide(self)
 	self.durationBg:Hide()
 	self.stackBg:Hide()
 end
-local function CreateBuffIcon(frame,i)
-	frame.fPBiconsFrame.iconsFrame[i] = CreateFrame("Button")
-	frame.fPBiconsFrame.iconsFrame[i]:SetParent(frame.fPBiconsFrame)
-	local buffIcon = frame.fPBiconsFrame.iconsFrame[i]
+local function CreateBuffIcon(frame, i)
+    frame.fPBiconsFrame.iconsFrame[i] = CreateFrame("Button")
+    frame.fPBiconsFrame.iconsFrame[i]:SetParent(frame.fPBiconsFrame)
+    local buffIcon = frame.fPBiconsFrame.iconsFrame[i]
 
-	buffIcon.texture = buffIcon:CreateTexture(nil, "BACKGROUND")
+    buffIcon.texture = buffIcon:CreateTexture(nil, "BACKGROUND")
+    buffIcon.border = buffIcon:CreateTexture(nil, "BORDER")
+    buffIcon.cooldown = CreateFrame("Cooldown", nil, buffIcon, "CooldownFrameTemplate")
+    buffIcon.cooldown:SetReverse(true)
+    buffIcon.cooldown:SetDrawEdge(false)
 
-	buffIcon.border = buffIcon:CreateTexture(nil,"BORDER")
+    buffIcon.durationtext = buffIcon:CreateFontString(nil, "ARTWORK")
+    buffIcon.durationBg = buffIcon:CreateTexture(nil, "BORDER")
+    buffIcon.durationBg:SetVertexColor(0, 0, 0, .75)
 
-	buffIcon.cooldown = CreateFrame("Cooldown", nil, buffIcon, "CooldownFrameTemplate")
-	buffIcon.cooldown:SetReverse(true)
-	buffIcon.cooldown:SetDrawEdge(false)
+    buffIcon.stacktext = buffIcon:CreateFontString(nil, "ARTWORK")
+    buffIcon.stackBg = buffIcon:CreateTexture(nil, "BORDER")
+    buffIcon.stackBg:SetVertexColor(0, 0, 0, .75)
 
-	buffIcon.durationtext = buffIcon:CreateFontString(nil, "ARTWORK")
+    UpdateBuffIconOptions(buffIcon)
 
-	buffIcon.durationBg = buffIcon:CreateTexture(nil,"BORDER")
-	buffIcon.durationBg:SetVertexColor(0,0,0,.75)
+    buffIcon.stacktext:Hide()
+    buffIcon.border:Hide()
+    buffIcon.cooldown:Hide()
+    buffIcon.durationtext:Hide()
+    buffIcon.durationBg:Hide()
+    buffIcon.stackBg:Hide()
 
-	buffIcon.stacktext = buffIcon:CreateFontString(nil, "ARTWORK")
+    buffIcon:SetScript("OnHide", iconOnHide)
+    buffIcon:SetScript("OnUpdate", iconOnUpdate)
 
-	buffIcon.stackBg = buffIcon:CreateTexture(nil,"BORDER")
-	buffIcon.stackBg:SetVertexColor(0,0,0,.75)
-
-	UpdateBuffIconOptions(buffIcon)
-
-	buffIcon.stacktext:Hide()
-	buffIcon.border:Hide()
-	buffIcon.cooldown:Hide()
-	buffIcon.durationtext:Hide()
-	buffIcon.durationBg:Hide()
-	buffIcon.stackBg:Hide()
-
-	buffIcon:SetScript("OnHide", iconOnHide)
-	buffIcon:SetScript("OnUpdate", iconOnUpdate)
-
-	if MSQ then
-		Group:AddButton(buffIcon,{
-			Icon = buffIcon.texture,
-			Cooldown = buffIcon.cooldown,
-			Normal = buffIcon.border,
-			Count = false,
-			Duration = false,
-			FloatingBG = false,
-			Flash = false,
-			Pushed = false,
-			Disabled = false,
-			Checked = false,
-			Border = false,
-			AutoCastable = false,
-			Highlight = false,
-			HotKey = false,
-			Name = false,
-			AutoCast = false,
-		})
-	end
+    if MSQ then
+        Group:AddButton(buffIcon, {
+            Icon = buffIcon.texture,
+            Cooldown = buffIcon.cooldown,
+            Normal = buffIcon.border,
+            Count = false,
+            Duration = false,
+            FloatingBG = false,
+            Flash = false,
+            Pushed = false,
+            Disabled = false,
+            Checked = false,
+            Border = false,
+            AutoCastable = false,
+            Highlight = false,
+            HotKey = false,
+            Name = false,
+            AutoCast = false,
+        })
+    end
 end
 
-local function UpdateUnitAuras(nameplateID,updateOptions)
-	local frame = C_NamePlate_GetNamePlateForUnit(nameplateID)
-	if not frame then return end 	-- modifying friendly nameplates is restricted in instances since 7.2
 
-	if FilterUnits(nameplateID) then
-		if frame.fPBiconsFrame then
-			frame.fPBiconsFrame:Hide()
-		end
-		return
-	end
+local function UpdateUnitAuras(nameplateID, updateOptions)
+    local frame = C_NamePlate_GetNamePlateForUnit(nameplateID)
+    if not frame then return end -- Modifying friendly nameplates is restricted in instances since 7.2
 
-	ScanUnitBuffs(nameplateID, frame)
-	if not PlatesBuffs[frame] then
-		if frame.fPBiconsFrame then
-			frame.fPBiconsFrame:Hide()
-		end
-		return
-	end
-	if not db.disableSort then
-		table_sort(PlatesBuffs[frame],SortFunc)
-	end
+    if FilterUnits(nameplateID) then
+        if frame.fPBiconsFrame then
+            frame.fPBiconsFrame:Hide()
+        end
+        return
+    end
 
-	if not frame.fPBiconsFrame then
-		-- if parent == frame then it will change scale and alpha with nameplates
-		-- otherwise use UIParent, but this causes mess of icon/border textures
-		frame.fPBiconsFrame = CreateFrame("Frame")
-		local parent = db.parentWorldFrame and WorldFrame
-		if not parent then
-			parent = frame
-		end
-		frame.fPBiconsFrame:SetParent(parent)
-	end
-	if not frame.fPBiconsFrame.iconsFrame then
-		frame.fPBiconsFrame.iconsFrame = {}
-	end
+    ScanUnitBuffs(nameplateID, frame)
+    if not PlatesBuffs[frame] then
+        if frame.fPBiconsFrame then
+            frame.fPBiconsFrame:Hide()
+        end
+        return
+    end
+    if not db.disableSort then
+        table_sort(PlatesBuffs[frame].buffs, SortFunc)
+        table_sort(PlatesBuffs[frame].debuffs, SortFunc)
+    end
 
+    if not frame.fPBiconsFrame then
+        -- If parent == frame then it will change scale and alpha with nameplates
+        -- Otherwise use UIParent, but this causes mess of icon/border textures
+        frame.fPBiconsFrame = CreateFrame("Frame")
+        local parent = db.parentWorldFrame and WorldFrame or frame
+        frame.fPBiconsFrame:SetParent(parent)
+    end
+    if not frame.fPBiconsFrame.iconsFrame then
+        frame.fPBiconsFrame.iconsFrame = {}
+    end
 
+    -- Create icons for buffs
+    for i = 1, #PlatesBuffs[frame].buffs do
+        if not frame.fPBiconsFrame.iconsFrame[i] then
+            CreateBuffIcon(frame, i)
+        end
 
-	for i = 1, #PlatesBuffs[frame] do
-		if not frame.fPBiconsFrame.iconsFrame[i] then
-			CreateBuffIcon(frame,i)
-		end
+        local buff = PlatesBuffs[frame].buffs[i]
+        local buffIcon = frame.fPBiconsFrame.iconsFrame[i]
+        buffIcon.type = buff.type
+        buffIcon.icon = buff.icon
+        buffIcon.stack = buff.stack
+        buffIcon.debufftype = buff.debufftype
+        buffIcon.duration = buff.duration
+        buffIcon.expiration = buff.expiration
+        buffIcon.id = buff.id
+        buffIcon.durationSize = buff.durationSize
+        buffIcon.stackSize = buff.stackSize
+        buffIcon.width = db.baseWidth * buff.scale
+        buffIcon.height = db.baseHeight * buff.scale
+        if updateOptions then
+            UpdateBuffIconOptions(buffIcon)
+        end
+        UpdateBuffIcon(buffIcon)
+        buffIcon:Show()
+    end
 
-		local buff = PlatesBuffs[frame][i]
-		local buffIcon = frame.fPBiconsFrame.iconsFrame[i]
-		buffIcon.type = buff.type
-		buffIcon.icon = buff.icon
-		buffIcon.stack = buff.stack
-		buffIcon.debufftype = buff.debufftype
-		buffIcon.duration = buff.duration
-		buffIcon.expiration = buff.expiration
-		buffIcon.id = buff.id
-		buffIcon.durationSize = buff.durationSize
-		buffIcon.stackSize = buff.stackSize
-		buffIcon.width = db.baseWidth * buff.scale
-		buffIcon.height = db.baseHeight * buff.scale
-		if updateOptions then
-			UpdateBuffIconOptions(buffIcon)
-		end
-		UpdateBuffIcon(buffIcon)
-		buffIcon:Show()
-	end
-	frame.fPBiconsFrame:Show()
+    -- Create icons for debuffs
+    local debuffStartIndex = #PlatesBuffs[frame].buffs + 1
+    for i = 1, #PlatesBuffs[frame].debuffs do
+        local index = debuffStartIndex + i - 1
+        if not frame.fPBiconsFrame.iconsFrame[index] then
+            CreateBuffIcon(frame, index)
+        end
 
-	if #frame.fPBiconsFrame.iconsFrame > #PlatesBuffs[frame] then
-		for i = #PlatesBuffs[frame]+1, #frame.fPBiconsFrame.iconsFrame do
-			if frame.fPBiconsFrame.iconsFrame[i] then
-				frame.fPBiconsFrame.iconsFrame[i]:Hide()
-			end
-		end
-	end
+        local debuff = PlatesBuffs[frame].debuffs[i]
+        local debuffIcon = frame.fPBiconsFrame.iconsFrame[index]
+        debuffIcon.type = debuff.type
+        debuffIcon.icon = debuff.icon
+        debuffIcon.stack = debuff.stack
+        debuffIcon.debufftype = debuff.debufftype
+        debuffIcon.duration = debuff.duration
+        debuffIcon.expiration = debuff.expiration
+        debuffIcon.id = debuff.id
+        debuffIcon.durationSize = debuff.durationSize
+        debuffIcon.stackSize = debuff.stackSize
+        debuffIcon.width = db.baseWidth * debuff.scale
+        debuffIcon.height = db.baseHeight * debuff.scale
+        if updateOptions then
+            UpdateBuffIconOptions(debuffIcon)
+        end
+        UpdateBuffIcon(debuffIcon)
+        debuffIcon:Show()
+    end
+    frame.fPBiconsFrame:Show()
 
-	DrawOnPlate(frame)
+    -- Hide any extra icons beyond the current layout
+    local totalIcons = #PlatesBuffs[frame].buffs + #PlatesBuffs[frame].debuffs
+    for i = totalIcons + 1, #frame.fPBiconsFrame.iconsFrame do
+        if frame.fPBiconsFrame.iconsFrame[i] then
+            frame.fPBiconsFrame.iconsFrame[i]:Hide()
+        end
+    end
+
+    DrawOnPlate(frame)
 end
+
+
 
 function fPB.UpdateAllNameplates(updateOptions)
 	for i, p in ipairs(C_NamePlate_GetNamePlates()) do
 		local unit = p.namePlateUnitToken
 		if unit then
+			
 			UpdateUnitAuras(unit,updateOptions)
 		end
 	end
