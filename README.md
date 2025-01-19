@@ -14,7 +14,7 @@ Smart buffs version : Works like the Target BuffFrame, when a debuff is added th
 ![image](https://github.com/user-attachments/assets/e10d4fdc-7a3a-4e70-af9b-b72c8fdaa158)
 
 
-Separate buffs version : Doesn't work like the smart buffs version, the debuffs doesn't row doesn't move the buff row anymore.
+Separate buffs version : Doesn't work like the smart buffs version, the debuffs doesn't move the buff row anymore.
 ![image](https://github.com/user-attachments/assets/fd072776-766f-4df5-9ecb-7eb118ef0b10)
 ![image](https://github.com/user-attachments/assets/3dc14c59-4d65-4264-bf19-5cbdbea028f0)
 
