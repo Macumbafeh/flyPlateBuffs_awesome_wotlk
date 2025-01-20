@@ -129,6 +129,58 @@ local DefaultSettings = {
 	},
 }
 
+local interruptDurations = {
+  -- [1766] = 5,      -- Kick R1 (Rogue)
+    --[1767] = 5,      -- Kick R2 (Rogue)
+    --[1768] = 5,      -- Kick R3 (Rogue)
+    --[1769] = 5,      -- Kick R4 (Rogue)
+    [38768] = 5,     -- Kick R5 (Rogue)
+    -- [26679] = 3,  -- Deadly Throw (Rogue), no longer interrupts in WotLK
+    -- [2139] = 7,      -- Counterspell (Mage)
+    [6552] = 4,      -- Pummel R1 (Warrior)
+    --[6554] = 4,      -- Pummel Rank 2 (Warrior)
+    --[72] = 6,      -- Shield Bash R1  (Warrior)
+    --[1671] = 6,      -- Shield Bash R2 (Warrior)
+    --[1672] = 6,      -- Shield Bash R3 (Warrior)
+    --[29704] = 6,     -- Shield Bash R4 (Warrior)
+    --[19244] = 5,     -- Spell Lock Rank 1 (Warlock)
+    -- [19647] = 6,     -- Spell Loc
+    [32747] = 3, -- Deadly throw interrupt
+    
+    [15752] = 10, -- Linken's Boomerang Disarm
+    [19244] = 5, -- Spell Lock - Rank 1 (Warlock)
+    [19647] = 6, -- Spell Lock - Rank 2 (Warlock)
+    [8042] = 2, -- Earth Shock (Shaman)
+    [8044] = 2,
+    [8045] = 2,
+    [8046] = 2,
+    [10412] = 2,
+    [10413] = 2,
+    [10414] = 2,
+    [25454] = 2,
+    [13491] = 5, -- Iron Knuckles
+    [16979] = 4, -- Feral Charge (Druid)
+    [2139] = 8, -- Counterspell (Mage)
+    [1766] = 5, -- Kick (Rogue)
+    [38768] = 5, -- Kick (Rogue)
+    [1767] = 5,
+    [1768] = 5,
+    [1769] = 5,
+    [38768] = 5,
+    
+    -- [26679] = 3, -- Deadly Throw
+    [6552] = 4, -- Pummel
+    [6554] = 4,
+    [72] = 6, -- Shield Bash
+    [1671] = 6,
+    [1672] = 6,
+    [29704] = 6,
+    [22570] = 3, -- Maim
+    [29443] = 10, -- Clutch of Foresight
+}
+
+local activeInterrupts = {}
+
 -- Add default spells from defaultSpells1, defaultSpells2 ...
 do
 	--  as your code
@@ -388,6 +440,30 @@ local function ScanUnitBuffs(nameplateID, frame)
 		FilterBuffs(isAlly, frame, "HELPFUL", name, icon, stack, debufftype, duration, expiration, caster, spellID, i)
 		i=i+1
 	end
+	
+	local guid = UnitGUID(nameplateID)
+    if guid and activeInterrupts[guid] then
+        local intData = activeInterrupts[guid]
+        local remaining = intData.expiration - GetTime()
+        if remaining > 0 then
+            -- We'll treat it like a "HARMFUL" debuff with an expiration.
+            -- Use your normal 'AddBuff' or 'FilterBuffs' logic:
+            AddBuff(
+                frame,                  -- parent frame
+                "HARMFUL",             -- auraType
+                intData.icon,          -- icon
+                1,                     -- stack
+                nil,                   -- debuffType
+                intData.duration,      -- duration
+                intData.expiration,    -- expiration
+                intData.isMine,        -- my? (optional)
+                intData.spellID        -- ID
+            )
+        else
+            -- It's expired; remove it
+            activeInterrupts[guid] = nil
+        end
+    end
 end
 
 --------------------------------------------------------------------------
@@ -429,14 +505,30 @@ end
 --------------------------------------------------------------------------
 local total=0
 local function iconOnUpdate(self, elapsed)
-	total= total+ elapsed
-	if total>0 then
-		total=0
-		if self.expiration and self.expiration>0 then
-			local timeLeft= self.expiration- GetTime()
-			if timeLeft<0 then
-				return
-			end
+	self.elapsed = (self.elapsed or 0) + elapsed
+    if self.elapsed < 0.1 then return end -- only check ~10x/sec
+    self.elapsed = 0
+
+    if self.expiration and self.expiration > 0 then
+        local timeLeft = self.expiration - GetTime()
+        if timeLeft < 0 then
+            -- Hide this icon entirely:
+            self:SetAlpha(0)
+            self:Hide()
+            
+            -- (Optional) remove it from the table so it doesn’t come back 
+            -- next time LayoutIcons is called:
+            local frame = self:GetParent():GetParent()  -- container is self:GetParent(), parent is nameplate
+            local t = PlatesBuffs[frame].debuffs
+            for i, auraData in ipairs(t) do
+                if auraData.id == self.id then
+                    table.remove(t, i)
+                    break
+                end
+            end
+
+            return
+        end
 			if db.showDuration then
 				local fmt, val = FormatTime(timeLeft)
 				self.durationtext:SetFormattedText(fmt, val)
@@ -456,7 +548,6 @@ local function iconOnUpdate(self, elapsed)
 			end
 		end
 	end
-end
 
 local function iconOnHide(self)
 	self.stacktext:Hide()
@@ -688,7 +779,7 @@ local function UpdateUnitAuras(nameplateID, updateOptions)
 
 	frame.fPBiconsFrameBuffs:Hide()
 	frame.fPBiconsFrameDebuffs:Hide()
-
+	
 	--------------------------------------------------------------------------
 	-- 1) Buff icons
 	--------------------------------------------------------------------------
@@ -817,6 +908,11 @@ local function Nameplate_Removed(nameplateID)
 		if PlatesBuffs[frame] then
 			PlatesBuffs[frame]= nil
 		end
+		
+		local guid = UnitGUID(nameplateID)
+        if guid then
+            activeInterrupts[guid] = nil
+        end
 	end
 end
 
@@ -1051,7 +1147,7 @@ end
 fPB.Events= CreateFrame("Frame")
 fPB.Events:RegisterEvent("ADDON_LOADED")
 fPB.Events:RegisterEvent("PLAYER_LOGIN")
-
+fPB.Events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 fPB.Events:SetScript("OnEvent", function(self, event, ...)
 	if event=="ADDON_LOADED" and (...)==AddonName then
 		Initialize()
@@ -1084,6 +1180,35 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
 	elseif event=="PLAYER_REGEN_ENABLED" then
 		fPB.Events:UnregisterEvent("UNIT_AURA")
 		UpdateAllNameplates()
+	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
+        local _, event, _, _, _, _, _, destGUID, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo(...)
+
+
+        if event == "SPELL_INTERRUPT" then
+		-- print("DEBUG: We got SPELL_INTERRUPT!", spellID, spellName, "destGUID=", destGUID)
+    
+            local duration = interruptDurations[spellID] or 4
+            local now = GetTime()
+            local icon = select(3, GetSpellInfo(spellID)) or "Interface\\Icons\\INV_Misc_QuestionMark"
+
+            -- Mark that the destGUID is 'locked out' until now + duration:
+            activeInterrupts[destGUID] = {
+                spellID    = spellID,
+                icon       = icon,
+                start      = now,
+                expiration = now + duration,
+                duration   = duration,
+                isMine     = (sourceGUID == UnitGUID("player")),  -- optional
+            }
+
+            -- Force an update if that nameplate is visible:
+            for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+                local unit = plate.namePlateUnitToken
+                if unit and UnitGUID(unit) == destGUID then
+                    UpdateUnitAuras(unit)  -- cause a refresh
+                end
+            end
+        end
 	elseif event=="NAME_PLATE_UNIT_ADDED" then
 		Nameplate_Added(...)
 	elseif event=="NAME_PLATE_UNIT_REMOVED" then
