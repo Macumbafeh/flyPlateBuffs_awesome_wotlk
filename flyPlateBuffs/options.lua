@@ -688,6 +688,18 @@ fPB.MainOptionTable = {
             type = "header",
             name = "",
         },
+		
+		enableInterruptIcons = {
+			order = 9,
+			type = "toggle",
+            name = "Enable Interrupt Icons",
+            desc = "Show an icon on enemy nameplates when they are interrupted (lockout).",
+            get = function(info) return db.enableInterruptIcons end,
+            set = function(info, val)
+                db.enableInterruptIcons = val
+                fPB.UpdateAllNameplates(true) -- Force refresh
+            end,
+		}, 
 		--[[ lockBuffRow = {
 			order = 9,
 			type = "toggle",

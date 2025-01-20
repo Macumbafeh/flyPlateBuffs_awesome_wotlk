@@ -126,6 +126,7 @@ local DefaultSettings = {
 		Spells = {},
 		ignoredDefaultSpells = {},
 		showSpellID = false,
+		enableInterruptIcons = true,
 	},
 }
 
@@ -1166,7 +1167,7 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
         local _, event, _, _, _, _, _, destGUID, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo(...)
 
 
-        if event == "SPELL_INTERRUPT" then
+        if db.enableInterruptIcons and event == "SPELL_INTERRUPT" then
 		-- print("DEBUG: We got SPELL_INTERRUPT!", spellID, spellName, "destGUID=", destGUID)
     
             local duration = interruptDurations[spellID] or 4
