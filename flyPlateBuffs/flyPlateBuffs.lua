@@ -112,11 +112,12 @@ local DefaultSettings = {
 		ignoredDefaultSpells = {},
 
 		showSpellID = false,
+		enableInterruptIcons = true,
 	},
 }
 
 local interruptDurations = {
-    [26679] =  3, -- Deadly Throw
+   [26679] =  3, -- Deadly Throw
 	[15752] = 10, -- Linken's Boomerang Disarm
     [19244] = 5, -- Spell Lock - Rank 1 (Warlock)
         [19647] = 6, -- Spell Lock - Rank 2 (Warlock)
@@ -1153,7 +1154,7 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
         local _, event, _, _, _, _, _, destGUID, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo(...)
 
 
-        if event == "SPELL_INTERRUPT" then
+        if db.enableInterruptIcons and event == "SPELL_INTERRUPT" then
 		-- print("DEBUG: We got SPELL_INTERRUPT!", spellID, spellName, "destGUID=", destGUID)
     
             local duration = interruptDurations[spellID] or 4
