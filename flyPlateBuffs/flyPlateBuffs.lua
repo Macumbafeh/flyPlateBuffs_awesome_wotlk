@@ -127,6 +127,7 @@ local DefaultSettings = {
 		ignoredDefaultSpells = {},
 		showSpellID = false,
 		enableInterruptIcons = true,
+		enableOpenIcons = false,
 	},
 }
 
@@ -160,9 +161,17 @@ local interruptDurations = {
         [29704] = 6,
     [22570] = 3, -- Maim
     [29443] = 10, -- Clutch of Foresight
+	[1543] = 20,
+}
+
+-- Durations for your “open” AoE spells
+local openSpellsDurations = {
+    [26573] = 8,  -- Consecration
+    [1543]  = 20, -- Flare
 }
 
 local activeInterrupts = {}
+local activeOpenSpells = {}
 
 -- Add default spells from defaultSpells1, defaultSpells2 ...
 do
@@ -445,6 +454,31 @@ local function ScanUnitBuffs(nameplateID, frame)
         else
             -- It's expired; remove it
             activeInterrupts[guid] = nil
+        end
+    end
+	
+	local guid = UnitGUID(nameplateID)
+    
+    -- check AoE table
+    if guid and activeOpenSpells[guid] then
+        local data = activeOpenSpells[guid]
+        local remaining = data.expiration - GetTime()
+        if remaining > 0 then
+            -- Insert the fake aura
+            AddBuff(
+                frame,
+                "HARMFUL",          -- or "HELPFUL" if you prefer
+                data.icon,
+                1,                  -- stack
+                nil,                -- debuff type
+                data.duration,
+                data.expiration,
+                data.isMine,
+                data.spellID
+            )
+        else
+            -- If time is up, remove it so we don’t keep displaying it
+            activeOpenSpells[guid] = nil
         end
     end
 end
@@ -1164,7 +1198,7 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
 		fPB.Events:UnregisterEvent("UNIT_AURA")
 		UpdateAllNameplates()
 	elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        local _, event, _, _, _, _, _, destGUID, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo(...)
+        local _, event, _, sourceGUID, _, _, _, destGUID, _, _, _, spellID, spellName = CombatLogGetCurrentEventInfo(...)
 
 
         if db.enableInterruptIcons and event == "SPELL_INTERRUPT" then
@@ -1191,6 +1225,30 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
                     UpdateUnitAuras(unit)  -- cause a refresh
                 end
             end
+		elseif db.enableOpenIcons and event == "SPELL_CAST_SUCCESS" and (spellID == 26573 or spellID == 1543) then
+		 -- print("DEBUG: We got SPELL_CAST_SUCCESS!", spellID, spellName, "from", sourceGUID)
+			
+			local duration = openSpellsDurations[spellID] or 4
+			local now      = GetTime()
+			local icon     = select(3, GetSpellInfo(spellID)) or "Interface\\Icons\\INV_Misc_QuestionMark"
+
+			-- Store the “fake aura” in our activeOpenSpells table, keyed by the caster’s GUID
+			activeOpenSpells[sourceGUID] = {
+				spellID    = spellID,
+				icon       = icon,
+				start      = now,
+				expiration = now + duration,
+				duration   = duration,
+				isMine     = (sourceGUID == UnitGUID("player")),
+			}
+
+			-- Force an update if that caster's nameplate is visible
+			for _, plate in ipairs(C_NamePlate.GetNamePlates()) do
+				local unit = plate.namePlateUnitToken
+				if unit and UnitGUID(unit) == sourceGUID then
+					UpdateUnitAuras(unit)  -- cause a refresh
+				end
+			end
         end
 	elseif event=="NAME_PLATE_UNIT_ADDED" then
 		Nameplate_Added(...)

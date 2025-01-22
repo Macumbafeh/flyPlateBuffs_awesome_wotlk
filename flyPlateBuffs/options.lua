@@ -694,9 +694,22 @@ fPB.MainOptionTable = {
 			type = "toggle",
             name = "Enable Interrupt Icons",
             desc = "Show an icon on enemy nameplates when they are interrupted (lockout).",
+			width = "normal",
             get = function(info) return db.enableInterruptIcons end,
             set = function(info, val)
                 db.enableInterruptIcons = val
+                fPB.UpdateAllNameplates(true) -- Force refresh
+            end,
+		}, 
+		enableOpenIcons = {
+			order = 10,
+			type = "toggle",
+            name = "Enable Flare and Consecration Icons",
+			width = "full",
+            desc = "Show the duration of Flare and Consecration rank 1 on enemy nameplates when they are used to know when they will end.",
+            get = function(info) return db.enableOpenIcons end,
+            set = function(info, val)
+                db.enableOpenIcons = val
                 fPB.UpdateAllNameplates(true) -- Force refresh
             end,
 		}, 
@@ -714,7 +727,7 @@ fPB.MainOptionTable = {
 		-- end,
 		-- }, 
         parentWorldFrame = {
-            order = 10,
+            order = 11,
             type = "toggle",
             name = L["Always show icons with full opacity and size"],
             desc = L["Icons will not change on non-targeted nameplates.\n\n|cFFFF0000REALLY NOT RECOMMEND|r\nWhen icons overlay, there will be a mess of textures, digits, etc."],
