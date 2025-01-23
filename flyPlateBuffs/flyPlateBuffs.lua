@@ -145,7 +145,7 @@ local interruptDurations = {
         [10414] = 2,
         [25454] = 2,
     [13491] = 5, -- Iron Knuckles
-    [16979] = 4, -- Feral Charge (Druid)
+    [19675] = 4, -- Feral Charge (Druid)
     [2139] = 8, -- Counterspell (Mage)
     [1766] = 5, -- Kick (Rogue)
         [1767] = 5,
@@ -161,13 +161,14 @@ local interruptDurations = {
         [29704] = 6,
     [22570] = 3, -- Maim
     [29443] = 10, -- Clutch of Foresight
-	[1543] = 20,
 }
 
 -- Durations for your “open” AoE spells
 local openSpellsDurations = {
     [26573] = 8,  -- Consecration
     [1543]  = 20, -- Flare
+	[31687] = 45, -- Summon water elem
+	[34433] = 15, --Shadowfiend
 }
 
 local activeInterrupts = {}
@@ -1225,7 +1226,7 @@ fPB.Events:SetScript("OnEvent", function(self, event, ...)
                     UpdateUnitAuras(unit)  -- cause a refresh
                 end
             end
-		elseif db.enableOpenIcons and event == "SPELL_CAST_SUCCESS" and (spellID == 26573 or spellID == 1543) then
+		elseif db.enableOpenIcons and event == "SPELL_CAST_SUCCESS" and openSpellsDurations[spellID] then
 		 -- print("DEBUG: We got SPELL_CAST_SUCCESS!", spellID, spellName, "from", sourceGUID)
 			
 			local duration = openSpellsDurations[spellID] or 4
