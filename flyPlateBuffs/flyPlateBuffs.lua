@@ -661,22 +661,22 @@ local function UpdateBuffIcon(self)
 
 	if db.showDuration and self.expiration > 0 then
 		if db.durationPosition == 1 or db.durationPosition == 3 then
-			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "NORMAL")
+			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "THICKOUTLINE")
 			self.durationBg:Show()
 		else
-			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "OUTLINE")
+			self.durationtext:SetFont(fPB.font, (self.durationSize or db.durationSize), "THICKOUTLINE")
 		end
 		self.durationtext:Show()
 	end
 	if self.stack > 1 then
 		self.stacktext:SetText(tostring(self.stack))
 		if db.stackPosition == 2 or db.stackPosition == 3 then
-			self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "NORMAL")
+			self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "THICKOUTLINE")
 			self.stackBg:SetWidth(self.stacktext:GetStringWidth())
 			self.stackBg:SetHeight(self.stacktext:GetStringHeight())
 			self.stackBg:Show()
 		else
-			self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "OUTLINE")
+			self.stacktext:SetFont(fPB.stackFont, (self.stackSize or db.stackSize), "THICKOUTLINE")
 		end
 		self.stacktext:Show()
 	end
